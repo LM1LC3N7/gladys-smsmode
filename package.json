@@ -1,6 +1,6 @@
 {
   "name": "gladys-smsmode",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Send SMS from Gladys Assistant scenes through the smsmode API (France). Unofficial.",
   "type": "module",

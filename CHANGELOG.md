@@ -10,6 +10,8 @@ the notes of the version's GitHub Release.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-14
+
 ### Added
 
 - The scene action "Send an SMS (smsmode)": a text to the numbers given or to
@@ -37,3 +39,6 @@ the notes of the version's GitHub Release.
 ### Changed
 
 - The CI jobs stop after 30 minutes (`timeout-minutes`).
+
+[Unreleased]: https://github.com/LM1LC3N7/gladys-smsmode/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/LM1LC3N7/gladys-smsmode/releases/tag/v0.1.1
