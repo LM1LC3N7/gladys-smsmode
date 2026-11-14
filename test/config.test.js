@@ -1,33 +1,68 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeConfig, DEFAULT_CONFIG } from '../src/config.js';
+import { integerOption, normalizeConfig, validKey, validSender } from '../src/config.js';
 
-test('normalizeConfig returns the defaults when called with no argument', () => {
-  assert.deepEqual(normalizeConfig(), DEFAULT_CONFIG);
+test('integer options: strict, bounded, defaults on anything else', () => {
+  assert.equal(integerOption(50, 'max_sms_per_hour'), 50);
+  assert.equal(integerOption('50', 'max_sms_per_hour'), 50);
+  assert.equal(integerOption(0, 'max_sms_per_hour'), 1);
+  assert.equal(integerOption(-5, 'max_sms_per_hour'), 1);
+  assert.equal(integerOption(1e9, 'max_sms_per_hour'), 200);
+  assert.equal(integerOption('', 'max_sms_per_hour'), 20, "'' is not 0");
+  assert.equal(integerOption(null, 'max_sms_per_hour'), 20);
+  assert.equal(integerOption(2.5, 'max_sms_per_hour'), 20, 'a decimal is refused');
+  assert.equal(integerOption('2.5', 'max_parts'), 3);
+  assert.equal(integerOption('abc', 'max_parts'), 3);
+  assert.equal(integerOption(NaN, 'max_parts'), 3);
+  assert.equal(integerOption(11, 'max_parts'), 10);
 });
 
-test('normalizeConfig keeps user values over the defaults', () => {
-  const config = normalizeConfig({ latitude: 45.5, longitude: -73.6, unit: 'fahrenheit' });
-  assert.equal(config.latitude, 45.5);
-  assert.equal(config.longitude, -73.6);
-  assert.equal(config.unit, 'fahrenheit');
+test('key and sender checks', () => {
+  assert.ok(validKey('HCfnKCEcZygBmDS76IhOOhxhhuqV9g7g'));
+  for (const bad of [
+    'short',
+    'with space key',
+    'line\nbreak-key',
+    'accentué-key-1234',
+    'x'.repeat(201),
+    42,
+  ]) {
+    assert.equal(validKey(bad), false, JSON.stringify(bad));
+  }
+  assert.ok(validSender('MaMaison'));
+  assert.ok(validSender('Gladys2'));
+  for (const bad of ['Ab', 'Ma Maison', 'TooLongSender', '0612345678', 'Café', 42]) {
+    assert.equal(validSender(bad), false, JSON.stringify(bad));
+  }
 });
 
-test('normalizeConfig coerces numeric strings coming from a form', () => {
-  const config = normalizeConfig({ latitude: '48.8', longitude: '2.3', poll_frequency: '600' });
-  assert.equal(config.latitude, 48.8);
-  assert.equal(config.longitude, 2.3);
-  assert.equal(config.poll_frequency, 600);
-  assert.equal(typeof config.poll_frequency, 'number');
-});
-
-test('normalizeConfig falls back to the default for a missing numeric field', () => {
-  const config = normalizeConfig({ unit: 'celsius' });
-  assert.equal(config.poll_frequency, DEFAULT_CONFIG.poll_frequency);
-});
-
-test('GLADYS_PREFER_LOCAL defaults to true and only an explicit false disables it', () => {
-  assert.equal(normalizeConfig().GLADYS_PREFER_LOCAL, true);
-  assert.equal(normalizeConfig({ GLADYS_PREFER_LOCAL: true }).GLADYS_PREFER_LOCAL, true);
-  assert.equal(normalizeConfig({ GLADYS_PREFER_LOCAL: false }).GLADYS_PREFER_LOCAL, false);
+test('normalizeConfig: issues by code, never the value', () => {
+  const ok = normalizeConfig({
+    api_key: '  HCfnKCEcZygBmDS76IhOOhxhhuqV9g7g ',
+    default_recipients: '0612345678',
+    max_sms_per_hour: '10',
+    stop_mention: 'true',
+    accents: 'simplify',
+  });
+  assert.deepEqual(ok, {
+    apiKey: 'HCfnKCEcZygBmDS76IhOOhxhhuqV9g7g',
+    sender: '',
+    stop: true,
+    recipients: ['33612345678'],
+    maxPerHour: 10,
+    maxParts: 3,
+    accents: 'simplify',
+    issues: [],
+  });
+  const bad = normalizeConfig({
+    api_key: 'bad key!',
+    sender: 'x',
+    default_recipients: '0123456789',
+    accents: 'loud',
+  });
+  assert.deepEqual(bad.issues, ['bad_key', 'bad_sender', 'bad_recipients']);
+  assert.equal(bad.apiKey, '');
+  assert.equal(bad.accents, 'keep');
+  assert.deepEqual(normalizeConfig().issues, ['no_key']);
+  assert.equal(normalizeConfig({ stop_mention: 'yes' }).stop, false);
 });

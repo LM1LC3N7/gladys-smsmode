@@ -1,0 +1,236 @@
+[
+  {
+    "name": "cap: never reached",
+    "file": "src/app.js",
+    "from": "if (this.used(mono) + parts > this.config.maxPerHour) return 'cap';",
+    "to": ""
+  },
+  {
+    "name": "cap: window halved",
+    "file": "src/app.js",
+    "from": "mono - s.mono < CAP_WINDOW",
+    "to": "mono - s.mono < CAP_WINDOW / 2"
+  },
+  {
+    "name": "cap: a send that may have left given back",
+    "file": "src/app.js",
+    "from": "if (err.sent !== 'maybe') this.release(entry);",
+    "to": "this.release(entry);"
+  },
+  {
+    "name": "cap: a send that surely failed kept",
+    "file": "src/app.js",
+    "from": "if (err.sent !== 'maybe') this.release(entry);",
+    "to": ""
+  },
+  {
+    "name": "cap: smsmode's part count ignored",
+    "file": "src/app.js",
+    "from": "if (Number.isInteger(billed) && billed > entry.parts && billed <= 10) entry.parts = billed;",
+    "to": ""
+  },
+  {
+    "name": "cap: future /data date dropped",
+    "file": "src/app.js",
+    "from": "const age = Math.max(0, wall - item.wall);\n      if (age >= CAP_WINDOW) continue;",
+    "to": "const age = wall - item.wall;\n      if (age < 0 || age >= CAP_WINDOW) continue;"
+  },
+  {
+    "name": "refusal: not checked",
+    "file": "src/app.js",
+    "from": "if (!button && this.isRefused(this.config.apiKey)) return 'refused';",
+    "to": ""
+  },
+  {
+    "name": "refusal: buttons blocked too",
+    "file": "src/app.js",
+    "from": "if (!button && this.isRefused(",
+    "to": "if (this.isRefused("
+  },
+  {
+    "name": "refusal: never set",
+    "file": "src/app.js",
+    "from": "    if (err.code === 'refused') {\n      this.markRefused(config.apiKey);\n    } else if",
+    "to": "    if (err.code === 'refused') {\n      // none\n    } else if"
+  },
+  {
+    "name": "refusal: 403 on check taken as a refusal",
+    "file": "src/app.js",
+    "from": "if (err.code === 'forbidden') {",
+    "to": "if (false) {"
+  },
+  {
+    "name": "pause: not checked",
+    "file": "src/app.js",
+    "from": "if (this.paused(mono)) return 'paused';",
+    "to": ""
+  },
+  {
+    "name": "pause: no minimum",
+    "file": "src/app.js",
+    "from": "Math.max(grow ? PAUSE_MIN : 1, ms)",
+    "to": "Math.max(1, ms)"
+  },
+  {
+    "name": "pause: no maximum",
+    "file": "src/app.js",
+    "from": "Math.min(PAUSE_MAX, Math.max(",
+    "to": "Math.min(Infinity, Math.max("
+  },
+  {
+    "name": "pause: 5xx not growing",
+    "file": "src/app.js",
+    "from": "this.setPause(PAUSE_MIN * 2 ** this.pause.streak, 'server');",
+    "to": "this.setPause(PAUSE_MIN, 'server');"
+  },
+  {
+    "name": "pause: Retry-After ignored",
+    "file": "src/app.js",
+    "from": "this.setPause(err.retryAfter ?? PAUSE_MIN",
+    "to": "this.setPause(PAUSE_MIN"
+  },
+  {
+    "name": "deadline: not checked",
+    "file": "src/app.js",
+    "from": "if (deadline - mono < HTTP_TIMEOUT + 500) return 'time';",
+    "to": ""
+  },
+  {
+    "name": "stop: queued job still sent",
+    "file": "src/app.js",
+    "from": "if (!this.running || gen !== this.generation) return 'stopped';",
+    "to": ""
+  },
+  {
+    "name": "next recipient tried after a timeout",
+    "file": "src/app.js",
+    "from": "  'timeout',\n  'network',",
+    "to": "  'network',"
+  },
+  {
+    "name": "queue: unbounded",
+    "file": "src/app.js",
+    "from": "throw new NotSent('empty_text');\n    if (this.waiting >= MAX_QUEUE) throw new NotSent('queue_full');",
+    "to": "throw new NotSent('empty_text');"
+  },
+  {
+    "name": "queue: requests in parallel",
+    "file": "src/app.js",
+    "from": "const job = this.queue.then(() => this.sendAll(",
+    "to": "const job = Promise.resolve().then(() => this.sendAll("
+  },
+  {
+    "name": "sender: invalid one ignored",
+    "file": "src/app.js",
+    "from": "if (config.issues.includes('bad_sender')) throw new NotSent('bad_sender');",
+    "to": ""
+  },
+  {
+    "name": "/data: written while unreadable",
+    "file": "src/app.js",
+    "from": "if (this.dataState !== 'ok' && this.dataState !== 'missing') return false;",
+    "to": ""
+  },
+  {
+    "name": "/data: not saved after a late read",
+    "file": "src/app.js",
+    "from": "if (wasUnreadable) this.save();",
+    "to": ""
+  },
+  {
+    "name": "http: refused connection = may have left",
+    "file": "src/http.js",
+    "from": "sent: BEFORE_SENDING.test(code) ? 'no' : sentIfUnknown",
+    "to": "sent: sentIfUnknown"
+  },
+  {
+    "name": "http: cut connection = not sent",
+    "file": "src/http.js",
+    "from": "sent: BEFORE_SENDING.test(code) ? 'no' : sentIfUnknown",
+    "to": "sent: 'no'"
+  },
+  {
+    "name": "http: 5xx = not sent",
+    "file": "src/http.js",
+    "from": "throw new SmsError('server', { status, sent: unknown });",
+    "to": "throw new SmsError('server', { status, sent: 'no' });"
+  },
+  {
+    "name": "http: timeout = not sent",
+    "file": "src/http.js",
+    "from": "return new SmsError('timeout', { sent: sentIfUnknown });",
+    "to": "return new SmsError('timeout', { sent: 'no' });"
+  },
+  {
+    "name": "http: 4xx free text kept",
+    "file": "src/http.js",
+    "from": "/^[A-Za-z_.-]{3,60}$/.test(code)",
+    "to": "/^.{3,60}$/.test(code)"
+  },
+  {
+    "name": "http: body not bounded",
+    "file": "src/http.js",
+    "from": "if (size > limit) {",
+    "to": "if (false) {"
+  },
+  {
+    "name": "phone: a number starting with 0 after the code accepted",
+    "file": "src/phone.js",
+    "from": "if (digits.startsWith('0')) throw",
+    "to": "if (false) throw"
+  },
+  {
+    "name": "phone: +33 landline accepted",
+    "file": "src/phone.js",
+    "from": "if (/^33/.test(digits) && !/^33[67]\\d{8}$/.test(digits)) {",
+    "to": "if (false) {"
+  },
+  {
+    "name": "phone: overseas as metropolitan",
+    "file": "src/phone.js",
+    "from": "digits = overseas ? overseas[1] + compact.slice(1) : `33${compact.slice(1)}`;",
+    "to": "digits = `33${compact.slice(1)}`;"
+  },
+  {
+    "name": "phone: whole number in the mask",
+    "file": "src/phone.js",
+    "from": "${'*'.repeat(digits.length - 5)}",
+    "to": "${digits.slice(3, -2)}"
+  },
+  {
+    "name": "phone: more than 5 recipients",
+    "file": "src/phone.js",
+    "from": "if (numbers.length > MAX_RECIPIENTS) throw",
+    "to": "if (false) throw"
+  },
+  {
+    "name": "text: never cut",
+    "file": "src/text.js",
+    "from": "if (unitsOf(text, encoding) > room) {",
+    "to": "if (false) {"
+  },
+  {
+    "name": "text: extension counted once",
+    "file": "src/text.js",
+    "from": "if (GSM_EXTENSION.has(ch)) return 2;",
+    "to": "if (GSM_EXTENSION.has(ch)) return 1;"
+  },
+  {
+    "name": "text: 153 per part ignored",
+    "file": "src/text.js",
+    "from": "return Math.ceil(units / limit.part);",
+    "to": "return Math.ceil(units / limit.single);"
+  },
+  {
+    "name": "config: decimal accepted",
+    "file": "src/config.js",
+    "from": "if (!Number.isInteger(n)) return DEFAULTS[key];",
+    "to": "if (!Number.isFinite(n)) return DEFAULTS[key];"
+  },
+  {
+    "name": "config: control characters in the key",
+    "file": "src/config.js",
+    "from": "/^[\\x21-\\x7e]{8,200}$/",
+    "to": "/^.{8,200}$/s"
+  }
+]

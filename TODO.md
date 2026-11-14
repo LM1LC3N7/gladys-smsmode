@@ -1,0 +1,64 @@
+# TODO
+
+## Before announcing
+
+- [ ] Test with a real smsmode account: the check button (balance and role of
+      a key), a test SMS, a scene with two numbers, a custom sender with and
+      without STOP, a 401 with a revoked key, a 402 with no credit.
+- [ ] Test on a real Gladys 5.3+: install, status, the scene action and its
+      outputs read by the next action, the two buttons.
+- [ ] Turn on "Private vulnerability reporting" (SECURITY.md points there).
+- [ ] Add the `gladys-assistant-integration` topic to publish in the store
+      (after the first release: the store validator needs the GHCR image).
+- [ ] Store field left out of the manifest: `keywords` (SMS, smsmode, texto,
+      notification, alerte).
+
+## To confirm
+
+- [ ] Whether smsmode answers 429 at all, and with a Retry-After (not in the
+      OpenAPI file; the module handles both).
+- [ ] Whether `messagePartCount` is in the 201 answer (the cap counts it when
+      it says more parts than computed here).
+- [ ] What `GET /commons/v1/organisations` gives to a key with the "User"
+      role: its organisation with `balance.amount`, or a 403 (both handled).
+- [ ] How smsmode splits a GSM text whose extension character (€) falls on a
+      part boundary (computed here as 153 septets per part).
+- [ ] The exact menu of the smsmode customer area where API keys are created
+      (the docs say "API section").
+
+## Ideas
+
+- A `communication` channel (send-only, `contact_schema` per user) once the
+  core lets a channel refuse the system messages; for now an SMS leaves only
+  from the scene action or the test button.
+- Scheduled sending (`sentDate`) and delivery reports (needs an inbound
+  webhook, Gladys Plus).
+
+## Decisions
+
+- **Version 0.1.0** set once by hand when leaving the template (package, lock
+  file, manifest, image tag `ghcr.io/lm1lc3n7/gladys-smsmode:0.1.0`, User-Agent
+  in `src/constants.js`); the Release workflow owns it from now on.
+- **`type: "provider"`, `gladys_version: ">=5.3.0"`, `countries: ["FR"]`**: a
+  scene action and two buttons, no device. Not `type: "communication"`: the
+  core sends its system messages (backups, batteries, upgrades) to every
+  channel by default, which would send paid SMS without a scene action (lot 23
+  rule: no send without a scene action or the test button). SDK ^0.16.0, the
+  latest on 2026-11-14.
+- **The hourly cap counts billed parts**, per recipient, reserved before the
+  request; given back only when smsmode surely did not take the SMS (4xx,
+  redirect, DNS, refused connection, TLS). A save of `/data` that fails does
+  not stop an alarm SMS: the cap then holds in memory for the run.
+- **No retry of a send**, ever: a timeout, a cut connection or a 5xx may have
+  left. `refClient` is not an idempotency key in the smsmode documentation.
+- **A refused key** is kept as an 8-bit salted HMAC (many keys share a value):
+  a new key is always tried; a 1-in-256 collision is lifted by a button.
+- **A text too long is cut** to the maximum number of SMS per message rather
+  than refused: an alarm SMS still leaves; `truncated` says it.
+- **Unreadable `/data`**: sends go on (in-memory cap), the file is never
+  overwritten, read again every 10 s, the run's sends merged and saved then.
+- **A wall time in the future in `/data`** (a clock set back) counts as now for
+  the cap (at most one hour longer), never dropped.
+- **402 and 403** set the status but do not block the next send: smsmode
+  decides, and a credit top-up needs no action in Gladys.
+- **Test numbers in the docs** are fictional (06 12 34 56 78 style).

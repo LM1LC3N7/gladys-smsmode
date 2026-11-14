@@ -1,61 +1,125 @@
-# Demo Devices Template
+# smsmode for Gladys Assistant
 
-This is the user documentation of the integration. Gladys re-hosts this file
-and shows a permanent **Documentation** link to it in the Configuration screen
-(in the user's language, with English as the fallback) — it is when
-configuring that the user needs it most. Keep the short onboarding hints in
-the `section` blocks of the manifest `config_schema`; put the long
-step-by-step (screenshots, troubleshooting…) here.
+**Unofficial**, not affiliated with smsmode. Never tested with a real smsmode account: the API format
+comes from its public documentation (read on 14 November 2026).
 
-## What you get
+This integration sends SMS from your Gladys scenes, through your own [smsmode](https://www.smsmode.com/)
+account (a French SMS provider). Each SMS is paid from your smsmode credit.
 
-Six demo devices show up after installation: a weather station (real data
-from Open-Meteo), a switch, a dimmable light, a smart plug with power
-metering, a motion sensor and a camera.
+- **Send only**: nothing is received, no SMS reply is read.
+- An SMS leaves only from a **scene action** "Send an SMS (smsmode)" or a click on the "Send a test SMS"
+  button. No SMS at start, on a reconnection, nor when you save the configuration.
+- For France: French mobiles (06, 07, overseas included). A foreign number written with + or 00 is
+  accepted too, at the smsmode price of its country.
+
+## Before you start
+
+1. Create an account on [smsmode.com](https://www.smsmode.com/) and buy credit.
+2. In your smsmode customer area, API section, create an **API key**.
+3. In Gladys, install the integration, paste the key, save.
+4. Click **Check the key and the credit**: smsmode says whether it accepts the key and gives the balance
+   of the account. This button sends no SMS.
+5. If you like, click **Send a test SMS** with your number (one paid SMS, counted in the hourly cap).
 
 ## Configuration
 
-1. Open the **Configuration** tab of the integration.
-2. Set the **latitude** and **longitude** the demo weather station should
-   observe (they default to Paris), and pick your temperature unit.
-   The **refresh interval** sets how often the weather station and the
-   plug's power are read: every 5 minutes by default, every minute at most.
-3. Save: the devices appear in the **Discovery** tab, ready to be added.
+| Setting                 | Role                                                                                                                                                                           |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| smsmode API key         | Kept by Gladys in its database, never shown again, sent only to smsmode (`X-Api-Key` header of `https://rest.smsmode.com`).                                                    |
+| Default numbers         | Used when the scene action gives none. Separated by commas, 5 at most.                                                                                                         |
+| Sender name             | Optional: 3 to 11 letters or digits, at least one letter ("MyHouse"). Empty: smsmode's default sender. An invalid sender blocks sending (the status says so).                  |
+| Add the STOP mention    | smsmode adds "STOP" and a short number at the end of the SMS. smsmode asks for it with a custom sender on a marketing channel; without it, an operator may replace the sender. |
+| Maximum SMS per hour    | Safety cap, 1 to 200 (20 by default). See below.                                                                                                                               |
+| Maximum SMS per message | 1 to 10 (3 by default): beyond, the text is cut and ends with "...".                                                                                                           |
+| Accents                 | "Keep them" (default) or "Simplify" (see below).                                                                                                                               |
 
-The **Prefer the local connection** toggle drives the demo plug: it reports
-the channel it actually uses as a badge (local or cloud), with an orange dot
-when it runs degraded (local refused, cloud fallback).
+### Numbers accepted
 
-## Actions
+- French mobiles: `06 12 34 56 78`, `07.12.34.56.78`, `+33 6 12 34 56 78`, `0033 6...`, `33612345678`.
+- Overseas mobiles written the French way: 0692 and 0693 (La Réunion), 0639 (Mayotte), 0690 and 0691
+  (Guadeloupe, Saint-Martin, Saint-Barthélemy), 0694 (French Guiana), 0696 and 0697 (Martinique): the
+  calling code of the territory is put in their place.
+- Any international number written with `+` or `00` (8 to 15 digits).
+- Refused: French landlines and special numbers (01 to 05, 08, 09: they receive no SMS), short codes,
+  letters.
 
-- **Test the weather provider** — performs a live request to Open-Meteo and
-  shows the current temperature and humidity under the button.
-- **Identify a device** — pick one of your devices in the list and it will
-  signal itself (the demo light "blinks" in the logs).
+A number is never written whole in the logs nor in the messages: only the first 3 and the last 2 digits
+show (`336******78`).
 
-## Scenes
+## The scene action "Send an SMS (smsmode)"
 
-The integration adds its own cards to the scene editor (Gladys 5.1 or
-later), under the **Integrations** category:
+Fields:
 
-- **Motion detected** (trigger) — starts the scene when a demo motion sensor
-  sees something move. Optionally pick the sensor and what moved (person,
-  animal); left empty, any detection matches. The following actions can
-  read what moved with `{{triggerEvent.data.target}}`.
-- **Identify a device** (action) — makes the chosen device signal itself.
-  It returns whether the device could signal itself, so the following
-  actions can depend on it.
+- **Text** (required): Gladys replaces the scene variables in it.
+- **Numbers** (optional): empty, the default numbers.
 
-## Dashboard
+Outputs, for the following actions of the scene:
 
-Add the **Demo status** widget to a dashboard: it shows the live
-temperature of the weather station and the power of the office plug, the
-connection the plug currently uses (orange when degraded) and the observed
-location. Its **Identify the light** button makes the demo light signal
-itself.
+- `sent`: SMS accepted by smsmode;
+- `not_sent`: recipients not reached (refused, not tried, or without confirmation);
+- `message_ids`: smsmode ids of the accepted messages, separated by commas;
+- `truncated`: true when the text was cut.
 
-## Troubleshooting
+When no SMS is accepted, the action fails with the reason in the scene log ("Nothing sent: the hourly
+cap is reached", …); the scene goes on. Several recipients are served one after the other: a 400 on one
+number does not stop the next one; a refused key, a lack of credit, a failure or a timeout stop the
+next ones.
 
-The integration logs everything it does: check the integration logs from the
-Gladys UI (or `docker logs` on the host) with `LOG_LEVEL=debug` for the full
-detail.
+The action gives Gladys one minute at most. A request lasts 10 seconds at most; a recipient with less
+than 10 seconds left is not tried.
+
+## The safeguards
+
+- **Hourly cap**: the SMS billed over the last 60 minutes (a 2-SMS text counts 2, and each recipient
+  counts) never pass the setting. An SMS is counted before its request leaves; it is given back only
+  when smsmode surely did not take it (a 4xx error, server not found, connection refused). The number of parts is the one the module computes, raised when smsmode
+  announces more in its answer. The send times are kept in `/data`: a restart does not reset the
+  count. When `/data` is unreadable (the status says so) or cannot be written, the cap counts only the
+  SMS sent since the start; sending is not blocked for that.
+- **Never tried again** when an SMS may have left (timeout, connection cut, 5xx error): a second try
+  could be a second paid SMS. The result says "sent without confirmation".
+- **One send at a time** to smsmode; at most 20 sends wait for their turn, more are refused.
+- **Pause**: after a 429 (smsmode asks to slow down), the time smsmode gives, between 60 s and 6 h;
+  after a 5xx error, 60 s, doubled on each new error, 6 h at most. Nothing is sent during the pause,
+  buttons included; it is kept in `/data`.
+- **Refused key** (401): no scene uses it any more. A short fingerprint (8 bits, salted) is kept in
+  `/data`, never the key. The refusal is lifted by a new key, or by a success of either button (which
+  do try the key).
+- **Credit too low** (402) or **sender refused** (403): the status says so; the next send is tried all
+  the same (smsmode decides).
+
+## Text, accents and cost
+
+An SMS holds 160 characters of the SMS alphabet (GSM 7-bit), or 153 per part beyond. This alphabet has
+é, è, à, ù, ì, ò, Ç but **not** ê, â, î, ô, û, ë, ï, ç, œ, ’, « », nor emojis: one of them turns the
+whole text into Unicode, 70 characters per SMS (67 per part). The characters € [ ] { } ^ ~ | \ count
+twice.
+
+"Simplify" replaces ê with e, ç with c, œ with oe, ’ with ', « » with ", – with -, … with ..., the
+no-break space with a space: a French text keeps 160 characters per SMS. An emoji stays as it is.
+
+Control and invisible characters are removed, line breaks are kept.
+
+## Status
+
+The status of the integration tells: ready (with the cap), key missing or refused, invalid sender,
+pause in progress and its end time (Paris time), credit too low at the last send, configuration not
+read yet (new try after 5 s, 10 s, 30 s, 1 min, then every 5 min), unreadable default numbers,
+unreadable `/data`.
+
+## Data
+
+- Sent to smsmode: the key (header), the number, the text, the sender and the STOP mention when set.
+- Kept in `/data/smsmode-state.json`: the time and the number of parts of the SMS of the last hour, the
+  pause in progress, the salt and the 8-bit fingerprint of a refused key. No key, no number, no text.
+- Logs: masked numbers, the number of SMS parts never the text, never the key.
+
+## Limits
+
+- This is not a Gladys messaging channel: the Gladys "Send a message" action does not go through
+  smsmode. On purpose: a channel would also get the Gladys system messages (backups, batteries…), as
+  many paid SMS sent without a scene action.
+- Delivery reports (delivered, undelivered) are not followed: "accepted" means smsmode took the SMS,
+  not that it arrived.
+- The credit check reads the first organisation of the key; a key with a restricted role may not be
+  allowed to (the button then only says the key is accepted).

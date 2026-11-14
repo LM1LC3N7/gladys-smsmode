@@ -1,177 +1,296 @@
 {
   "manifest_version": 1,
-  "type": "device",
-  "name": "Demo Devices Template",
+  "type": "provider",
+  "name": "smsmode",
   "description": {
-    "en": "Starter template showing sensors, a switch, a dimmable light and a smart plug.",
-    "fr": "Template de démarrage : capteurs, interrupteur, lampe variable et prise connectée."
+    "en": "Unofficial: send SMS from your scenes through your smsmode account (France).",
+    "fr": "Non officiel : envoyez des SMS depuis vos scènes avec votre compte smsmode (France)."
   },
-  "version": "1.0.0",
-  "docker_image": "ghcr.io/gladysassistant/integration-template-js:1.0.0",
-  "gladys_version": ">=5.1.0",
-  "cover_image": "https://raw.githubusercontent.com/GladysAssistant/integration-template-js/master/cover.png",
-  "categories": ["lighting", "security", "environment"],
-  "transports": ["local", "cloud"],
+  "version": "0.1.0",
+  "docker_image": "ghcr.io/lm1lc3n7/gladys-smsmode:0.1.0",
+  "gladys_version": ">=5.3.0",
+  "cover_image": "https://raw.githubusercontent.com/LM1LC3N7/gladys-smsmode/main/cover.png",
+  "categories": ["notifications"],
+  "countries": ["FR"],
+  "transports": ["cloud"],
   "config_schema": [
     {
       "key": "intro",
       "type": "section",
-      "label": { "en": "Getting started", "fr": "Pour commencer" },
+      "label": {
+        "en": "SMS through smsmode",
+        "fr": "SMS avec smsmode"
+      },
       "description": {
-        "en": "The demo weather station reads real data from the free Open-Meteo API: pick the coordinates to observe. No account, no API key.",
-        "fr": "La station météo de démonstration lit de vraies données via l'API gratuite Open-Meteo : choisissez les coordonnées à observer. Pas de compte, pas de clé d'API."
+        "en": "Unofficial connector, not affiliated with smsmode. Your scenes send SMS with the \"Send an SMS (smsmode)\" action, through your own smsmode account: each SMS is paid from your smsmode credit. Nothing is ever sent at another time (no SMS at start, nor when you save this page), and nothing is received. Create an account on smsmode.com, buy credit, then create an API key in your smsmode customer area (API section) and paste it below.",
+        "fr": "Connecteur non officiel, sans lien avec smsmode. Vos scènes envoient des SMS avec l'action « Envoyer un SMS (smsmode) », par votre propre compte smsmode : chaque SMS est payé sur votre crédit smsmode. Rien n'est jamais envoyé à un autre moment (aucun SMS au démarrage, ni quand vous enregistrez cette page), et rien n'est reçu. Créez un compte sur smsmode.com, achetez du crédit, puis créez une clé d'API dans votre espace client smsmode (rubrique API) et collez-la ci-dessous."
       },
       "links": [
         {
-          "url": "https://open-meteo.com/en/docs",
-          "label": { "en": "Open-Meteo documentation", "fr": "Documentation Open-Meteo" }
+          "url": "https://www.smsmode.com/",
+          "label": {
+            "en": "smsmode",
+            "fr": "smsmode"
+          }
+        },
+        {
+          "url": "https://dev.smsmode.com/sms/v1/",
+          "label": {
+            "en": "smsmode API documentation",
+            "fr": "Documentation de l'API smsmode"
+          }
+        },
+        {
+          "url": "https://github.com/LM1LC3N7/gladys-smsmode/blob/main/docs/fr.md",
+          "label": {
+            "en": "Guide (French)",
+            "fr": "Guide (français)"
+          }
+        },
+        {
+          "url": "https://github.com/LM1LC3N7/gladys-smsmode/blob/main/docs/en.md",
+          "label": {
+            "en": "Guide (English)",
+            "fr": "Guide (anglais)"
+          }
         }
       ]
     },
     {
-      "key": "latitude",
-      "type": "number",
-      "label": { "en": "Latitude", "fr": "Latitude" },
-      "description": {
-        "en": "Latitude used for the demo weather sensor.",
-        "fr": "Latitude utilisée par le capteur météo de démonstration."
+      "key": "api_key",
+      "type": "secret",
+      "label": {
+        "en": "smsmode API key",
+        "fr": "Clé d'API smsmode"
       },
-      "placeholder": { "en": "e.g. 48.8566", "fr": "ex. 48.8566" },
-      "required": true,
-      "default": 48.8566,
-      "min": -90,
-      "max": 90
+      "description": {
+        "en": "Kept by Gladys in its database, never shown again, sent only to smsmode (X-Api-Key header).",
+        "fr": "Gardée par Gladys dans sa base, jamais réaffichée, envoyée seulement à smsmode (en-tête X-Api-Key)."
+      },
+      "required": true
     },
     {
-      "key": "longitude",
-      "type": "number",
-      "label": { "en": "Longitude", "fr": "Longitude" },
-      "description": {
-        "en": "Longitude used for the demo weather sensor.",
-        "fr": "Longitude utilisée par le capteur météo de démonstration."
+      "key": "default_recipients",
+      "type": "string",
+      "label": {
+        "en": "Default numbers (optional)",
+        "fr": "Numéros par défaut (facultatif)"
       },
-      "placeholder": { "en": "e.g. 2.3522", "fr": "ex. 2.3522" },
-      "required": true,
-      "default": 2.3522,
-      "min": -180,
-      "max": 180
+      "description": {
+        "en": "Used when a scene action names no number. French mobiles (06, 07, overseas included) or international numbers starting with + or 00, separated by commas, 5 at most.",
+        "fr": "Utilisés quand une action de scène ne donne aucun numéro. Mobiles français (06, 07, outre-mer compris) ou numéros internationaux commençant par + ou 00, séparés par des virgules, 5 au plus."
+      },
+      "placeholder": {
+        "en": "06 12 34 56 78, +33 7 98 76 54 32",
+        "fr": "06 12 34 56 78, +33 7 98 76 54 32"
+      },
+      "required": false
     },
     {
-      "key": "unit",
+      "key": "sender",
+      "type": "string",
+      "label": {
+        "en": "Sender name (optional)",
+        "fr": "Nom de l'émetteur (facultatif)"
+      },
+      "description": {
+        "en": "3 to 11 letters or digits, at least one letter, shown instead of a number. Empty: smsmode's default sender. A custom sender may need the STOP mention below, or the operators may replace it.",
+        "fr": "3 à 11 lettres ou chiffres, dont au moins une lettre, affiché à la place d'un numéro. Vide : l'émetteur par défaut de smsmode. Un émetteur personnalisé peut exiger la mention STOP ci-dessous, sinon les opérateurs peuvent le remplacer."
+      },
+      "placeholder": {
+        "en": "MyHouse",
+        "fr": "MaMaison"
+      },
+      "required": false
+    },
+    {
+      "key": "stop_mention",
+      "type": "boolean",
+      "label": {
+        "en": "Add the STOP mention",
+        "fr": "Ajouter la mention STOP"
+      },
+      "description": {
+        "en": "smsmode adds \"STOP\" and a short number at the end of each SMS (a few characters more). Asked by smsmode for a custom sender on a marketing channel.",
+        "fr": "smsmode ajoute « STOP » et un numéro court à la fin de chaque SMS (quelques caractères de plus). Demandé par smsmode pour un émetteur personnalisé sur un canal marketing."
+      },
+      "default": false,
+      "required": false
+    },
+    {
+      "key": "max_sms_per_hour",
+      "type": "number",
+      "label": {
+        "en": "Maximum SMS per hour",
+        "fr": "Nombre maximal de SMS par heure"
+      },
+      "description": {
+        "en": "Safety cap against a runaway scene: the SMS billed over the last 60 minutes (a long text counts as several), 1 to 200. Beyond it, nothing is sent and the scene action fails.",
+        "fr": "Plafond de sécurité contre une scène qui s'emballe : les SMS facturés sur les 60 dernières minutes (un texte long compte pour plusieurs), de 1 à 200. Au-delà, rien n'est envoyé et l'action de scène échoue."
+      },
+      "default": 20,
+      "min": 1,
+      "max": 200,
+      "required": false
+    },
+    {
+      "key": "max_parts",
+      "type": "number",
+      "label": {
+        "en": "Maximum SMS per message",
+        "fr": "Nombre maximal de SMS par message"
+      },
+      "description": {
+        "en": "A text longer than one SMS (160 characters, 70 with an accent outside the SMS alphabet like ê or ç, or an emoji) is billed as several. Beyond this number (1 to 10), the text is cut and ends with \"...\".",
+        "fr": "Un texte plus long qu'un SMS (160 caractères, 70 avec un accent hors de l'alphabet SMS comme ê ou ç, ou un emoji) est facturé comme plusieurs. Au-delà de ce nombre (1 à 10), le texte est coupé et se termine par « ... »."
+      },
+      "default": 3,
+      "min": 1,
+      "max": 10,
+      "required": false
+    },
+    {
+      "key": "accents",
       "type": "select",
-      "label": { "en": "Temperature unit", "fr": "Unité de température" },
-      "required": false,
-      "default": "celsius",
-      "options": [
-        { "value": "celsius", "label": { "en": "Celsius", "fr": "Celsius" } },
-        { "value": "fahrenheit", "label": { "en": "Fahrenheit", "fr": "Fahrenheit" } }
-      ]
-    },
-    {
-      "key": "poll_frequency",
-      "type": "number",
-      "label": { "en": "Refresh interval (s)", "fr": "Intervalle de rafraîchissement (s)" },
-      "description": {
-        "en": "How often sensors are polled, in seconds (one minute minimum).",
-        "fr": "Fréquence d'interrogation des capteurs, en secondes (une minute minimum)."
+      "label": {
+        "en": "Accents",
+        "fr": "Accents"
       },
-      "required": false,
-      "default": 300,
-      "min": 60,
-      "max": 3600
+      "description": {
+        "en": "\"Simplify\" replaces the letters outside the SMS alphabet (ê, ç, ô, œ…) and the typographic signs (’ « » …) by the closest ones (e, c, o, oe, ' \" ...), so a French text keeps 160 characters per SMS.",
+        "fr": "« Simplifier » remplace les lettres hors de l'alphabet SMS (ê, ç, ô, œ…) et les signes typographiques (’ « » …) par les plus proches (e, c, o, oe, ' \" ...), pour qu'un texte français garde 160 caractères par SMS."
+      },
+      "options": [
+        {
+          "value": "keep",
+          "label": {
+            "en": "Keep them",
+            "fr": "Les garder"
+          }
+        },
+        {
+          "value": "simplify",
+          "label": {
+            "en": "Simplify",
+            "fr": "Simplifier"
+          }
+        }
+      ],
+      "default": "keep",
+      "required": false
     }
   ],
   "actions": [
     {
-      "key": "test_weather",
-      "label": { "en": "Test the weather provider", "fr": "Tester le fournisseur météo" },
-      "timeout_seconds": 30
+      "key": "check_account",
+      "label": {
+        "en": "Check the key and the credit",
+        "fr": "Vérifier la clé et le crédit"
+      },
+      "description": {
+        "en": "Asks smsmode whether it accepts the key, and the balance of the account. Sends no SMS.",
+        "fr": "Demande à smsmode s'il accepte la clé, et le solde du compte. N'envoie aucun SMS."
+      },
+      "timeout_seconds": 20
     },
     {
-      "key": "identify",
-      "label": { "en": "Identify a device", "fr": "Identifier un appareil" },
-      "fields": [
-        {
-          "key": "device",
-          "type": "select",
-          "source": "devices",
-          "label": { "en": "Device", "fr": "Appareil" },
-          "required": true
-        }
-      ]
-    }
-  ],
-  "scene_triggers": [
-    {
-      "key": "motion_detected",
-      "label": { "en": "Motion detected", "fr": "Mouvement détecté" },
-      "description": {
-        "en": "A demo motion sensor saw a person or an animal move.",
-        "fr": "Un détecteur de démonstration a vu bouger une personne ou un animal."
+      "key": "send_test",
+      "label": {
+        "en": "Send a test SMS",
+        "fr": "Envoyer un SMS de test"
       },
+      "description": {
+        "en": "Sends one SMS (paid, counted in the hourly cap) to the number below.",
+        "fr": "Envoie un SMS (payant, compté dans le plafond horaire) au numéro ci-dessous."
+      },
+      "timeout_seconds": 30,
       "fields": [
         {
-          "key": "device",
-          "type": "select",
-          "source": "devices",
-          "label": { "en": "Sensor", "fr": "Détecteur" }
-        },
-        {
-          "key": "target",
-          "type": "multi_select",
-          "label": { "en": "What moved", "fr": "Ce qui a bougé" },
-          "options": [
-            { "value": "person", "label": { "en": "Person", "fr": "Personne" } },
-            { "value": "animal", "label": { "en": "Animal", "fr": "Animal" } }
-          ]
-        }
-      ],
-      "variables": [
-        {
-          "key": "target",
+          "key": "phone",
           "type": "string",
-          "label": { "en": "What moved", "fr": "Ce qui a bougé" }
+          "label": {
+            "en": "Mobile number",
+            "fr": "Numéro de mobile"
+          },
+          "placeholder": {
+            "en": "06 12 34 56 78",
+            "fr": "06 12 34 56 78"
+          },
+          "required": true
         }
       ]
     }
   ],
   "scene_actions": [
     {
-      "key": "identify_device",
-      "label": { "en": "Identify a device", "fr": "Identifier un appareil" },
-      "description": {
-        "en": "Make a device signal itself (the demo light blinks).",
-        "fr": "Fait se signaler un appareil (la lampe de démonstration clignote)."
+      "key": "send_sms",
+      "label": {
+        "en": "Send an SMS (smsmode)",
+        "fr": "Envoyer un SMS (smsmode)"
       },
-      "timeout_seconds": 15,
+      "description": {
+        "en": "Sends the text by SMS through smsmode (paid from your credit), to the numbers given or to the default ones. Never tried again when smsmode does not confirm.",
+        "fr": "Envoie le texte par SMS avec smsmode (payé sur votre crédit), aux numéros donnés ou à ceux par défaut. Jamais renvoyé quand smsmode ne confirme pas."
+      },
+      "timeout_seconds": 60,
       "fields": [
         {
-          "key": "device",
-          "type": "select",
-          "source": "devices",
-          "label": { "en": "Device", "fr": "Appareil" },
+          "key": "text",
+          "type": "string",
+          "label": {
+            "en": "Text",
+            "fr": "Texte"
+          },
           "required": true
+        },
+        {
+          "key": "recipients",
+          "type": "string",
+          "label": {
+            "en": "Numbers (empty: the default ones)",
+            "fr": "Numéros (vide : ceux par défaut)"
+          },
+          "placeholder": {
+            "en": "06 12 34 56 78",
+            "fr": "06 12 34 56 78"
+          },
+          "required": false
         }
       ],
       "outputs": [
         {
-          "key": "signalled",
+          "key": "sent",
+          "type": "number",
+          "label": {
+            "en": "SMS accepted",
+            "fr": "SMS acceptés"
+          }
+        },
+        {
+          "key": "not_sent",
+          "type": "number",
+          "label": {
+            "en": "Recipients not reached",
+            "fr": "Destinataires non atteints"
+          }
+        },
+        {
+          "key": "message_ids",
+          "type": "string",
+          "label": {
+            "en": "smsmode message ids",
+            "fr": "Identifiants des messages smsmode"
+          }
+        },
+        {
+          "key": "truncated",
           "type": "boolean",
-          "label": { "en": "Device signalled", "fr": "Appareil signalé" }
+          "label": {
+            "en": "Text cut",
+            "fr": "Texte coupé"
+          }
         }
       ]
-    }
-  ],
-  "widgets": [
-    {
-      "key": "demo_status",
-      "label": { "en": "Demo status", "fr": "État de la démo" },
-      "description": {
-        "en": "Live temperature and plug power, plug connection and observed location.",
-        "fr": "Température et puissance en direct, connexion de la prise, position observée."
-      },
-      "icon": "activity",
-      "action_timeout_seconds": 15
     }
   ]
 }
