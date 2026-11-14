@@ -65,21 +65,25 @@ Résultats, utilisables par les actions suivantes de la scène :
 
 Si aucun SMS n'est accepté, l'action échoue avec la raison dans le journal de la scène (« Rien envoyé :
 le plafond horaire est atteint », …) ; la scène continue. Plusieurs destinataires sont servis l'un après
-l'autre : un 400 sur un numéro n'empêche pas le suivant ; un refus de la clé, un crédit insuffisant, une
+l'autre : un 400 sur un numéro n'empêche pas le suivant ; un refus de la clé, un 402, un 403, une
 panne ou un délai dépassé arrêtent les suivants.
 
-L'action donne une minute au plus à Gladys. Une requête dure 10 secondes au plus ; un destinataire qui
-n'a plus 10 secondes devant lui n'est pas tenté.
+Gladys donne une minute à l'action, attente de sa propre connexion comprise ; le module s'en garde
+40 secondes. Une requête dure 10 secondes au plus ; un destinataire qui n'a plus 16,5 secondes devant
+lui (la requête et les deux écritures de `/data` qui l'entourent) n'est pas tenté.
 
 ## Les garde-fous
 
-- **Plafond horaire** : les SMS facturés sur les 60 dernières minutes (un texte de 2 SMS compte 2, et
-  chaque destinataire compte) ne dépassent jamais le réglage. Un SMS est compté avant que sa requête
-  parte ; il est rendu seulement si smsmode ne l'a sûrement pas pris (erreur 4xx, serveur introuvable,
-  connexion refusée). Le nombre de morceaux est celui que calcule le module, relevé si smsmode en
-  annonce plus dans sa réponse. Les heures d'envoi sont gardées dans `/data` : un redémarrage ne remet
-  pas le compteur à zéro. Si `/data` est illisible (le statut le dit) ou ne peut pas être écrit, le
-  plafond ne compte que les SMS envoyés depuis le démarrage ; l'envoi n'est pas bloqué pour autant.
+- **Plafond horaire** : un envoi qui ferait passer les SMS facturés sur les 60 dernières minutes
+  au-dessus du réglage est refusé (un texte de 2 SMS compte 2, chaque destinataire compte, la mention
+  STOP aussi). Le nombre de SMS est celui que calcule le module ; si smsmode en annonce plus dans sa
+  réponse, le compte est relevé après coup. Un SMS est compté et écrit dans `/data` avant que sa
+  requête parte ; il est rendu seulement si smsmode ne l'a sûrement pas pris (erreur 4xx, serveur
+  introuvable, connexion refusée). Un redémarrage ne remet donc pas le compteur à zéro. Au démarrage,
+  un envoi attend la lecture de `/data` (3 secondes au plus). Si `/data` est illisible, trop lent, ou
+  ne peut pas être écrit (le statut le dit dans chaque cas), le plafond ne compte que les SMS envoyés
+  depuis le démarrage, et un redémarrage peut l'oublier ; l'envoi n'est pas bloqué pour autant (une
+  alerte doit partir).
 - **Jamais de nouvel essai** d'un SMS qui a pu partir (délai dépassé, connexion coupée, erreur 5xx) :
   un second essai pourrait être un second SMS payant. Le résultat dit « envoyé sans confirmation ».
 - **Un seul envoi à la fois** vers smsmode ; 20 envois au plus attendent leur tour, au-delà ils sont
@@ -87,11 +91,14 @@ n'a plus 10 secondes devant lui n'est pas tenté.
 - **Pause** : après un 429 (smsmode demande de ralentir), la durée indiquée par smsmode, entre 60 s et
   6 h ; après une erreur 5xx, 60 s, doublée à chaque nouvelle erreur, 6 h au plus. Rien n'est envoyé
   pendant la pause, boutons compris ; elle est gardée dans `/data`.
-- **Clé refusée** (401) : plus aucune scène ne l'utilise. Une empreinte courte (8 bits, salée) est
-  gardée dans `/data`, jamais la clé. Le refus est levé par une nouvelle clé, ou par un succès de l'un des
-  deux boutons (qui, eux, essaient la clé).
-- **Crédit insuffisant** (402) ou **émetteur refusé** (403) : le statut le dit ; l'envoi suivant est
-  quand même tenté (smsmode décide).
+- **Clé refusée à l'envoi** (401 sur l'envoi d'un SMS) : plus aucune scène ne l'utilise. Une empreinte
+  courte (8 bits, salée) est gardée dans `/data`, jamais la clé. Le refus est levé en changeant la clé,
+  ou par un succès de l'un des deux boutons (qui, eux, essaient la clé). Un 401 du bouton « Vérifier la
+  clé et le crédit » (API de compte) ne bloque pas l'envoi : une clé peut avoir le droit d'envoyer sans
+  celui de lire son compte.
+- **402** ou **émetteur refusé** (403) : le statut le dit ; l'envoi suivant est quand même tenté
+  (smsmode décide). Le 402 (paiement requis, attendu pour un crédit épuisé) ne figure pas dans la
+  documentation de smsmode : à confirmer avec un vrai compte.
 
 ## Texte, accents et coût
 
@@ -103,14 +110,17 @@ caractères € [ ] { } ^ ~ | \ comptent double.
 « Simplifier » remplace ê par e, ç par c, œ par oe, ’ par ', « » par ", – par -, … par ..., l'espace
 insécable par une espace : un texte français reste à 160 caractères par SMS. Un emoji reste tel quel.
 
+Avec la mention STOP, 20 caractères sont gardés pour elle : le texte est coupé plus tôt, et elle compte
+dans le nombre de SMS et le plafond.
+
 Les caractères de contrôle et invisibles sont retirés, les retours à la ligne gardés.
 
 ## Statut
 
 Le statut de l'intégration dit : prête (avec le plafond), clé manquante ou refusée, émetteur invalide,
-pause en cours et son heure de fin (heure de Paris), crédit insuffisant au dernier envoi, configuration
-pas encore lue (nouvel essai à 5 s, 10 s, 30 s, 1 min puis toutes les 5 min), numéros par défaut
-illisibles, `/data` illisible.
+pause en cours et son heure de fin (heure de Paris), 402 ou 403 au dernier envoi, configuration pas
+encore lue (nouvel essai à 5 s, 10 s, 30 s, 1 min puis toutes les 5 min), numéros par défaut
+illisibles, `/data` illisible ou trop lent, `/data` non écrit.
 
 ## Données
 

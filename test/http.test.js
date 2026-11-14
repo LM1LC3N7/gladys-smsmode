@@ -74,6 +74,10 @@ test('each status says whether the SMS may have left', async () => {
 
 test('a 4xx gives its error code only, never its free text', async () => {
   await assert.rejects(
+    call(json({ status: 400, errorCode: '400.029', message: 'Invalid 33612345678' }, 400)),
+    (err) => err.detail === '400.029' && !err.message.includes('336'),
+  );
+  await assert.rejects(
     call(json({ errorCode: 'RECIPIENT_TO_INVALID', message: 'Invalid 33612345678' }, 400)),
     (err) => err.detail === 'RECIPIENT_TO_INVALID' && !err.message.includes('336'),
   );
@@ -130,4 +134,17 @@ test('headers: key, JSON both ways, User-Agent; GET without a body', async () =>
     );
     assert.equal(init.redirect, 'manual');
   }
+});
+
+test('a 4xx body is read up to 4 KB only', async () => {
+  let pulled = 0;
+  const stream = new ReadableStream({
+    pull(controller) {
+      pulled += 1;
+      controller.enqueue(new TextEncoder().encode('{"errorCode":"400.029",' + ' '.repeat(1000)));
+      if (pulled > 10_000) controller.close();
+    },
+  });
+  await assert.rejects(call(new Response(stream, { status: 400 })), { code: 'invalid' });
+  assert.ok(pulled < 20, `stopped early (${pulled} chunks)`);
 });

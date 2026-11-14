@@ -281,7 +281,7 @@ test('429: Retry-After followed within 60 s .. 6 h', async () => {
   }
 });
 
-test('401: the key is never sent again by a scene; a new key or a button lifts it', async () => {
+test('401 on a send: the key is never sent again by a scene; a new key or a button lifts it', async () => {
   const store = createMemoryStore();
   const ctx = await setup({ store, handler: () => json({ status: 401 }, 401) });
   const ack = await ctx.scene({ text: 'x', recipients: '0612345678, 0712345678' });
@@ -298,17 +298,36 @@ test('401: the key is never sent again by a scene; a new key or a button lifts i
   const again = await setup({ store });
   assert.match((await again.scene({ text: 'x' })).error, /refusée/);
   assert.equal(again.api.requests.length, 0);
-  // A new key is tried at once.
-  await again.gladys.fake.configUpdated({ ...BASE_CONFIG, api_key: `${KEY}-new` });
-  assert.equal((await again.scene({ text: 'x' })).success, true);
-  // Back to the old key: refused again until a button succeeds.
-  await again.gladys.fake.configUpdated(BASE_CONFIG);
-  assert.match((await again.scene({ text: 'x' })).error, /refusée/);
+  // The check button's success lifts it.
   const check = await again.gladys.fake.action('check_account', {});
   assert.match(check.data.message.fr, /accepté la clé\. Solde : 12\.50 EUR/);
   assert.equal(store.data.refused, null);
   assert.equal((await again.scene({ text: 'x' })).success, true);
   await again.app.stop();
+});
+
+test('a key changed during the run is always tried, even if its mark matches the refused one', async () => {
+  const store = createMemoryStore();
+  const ctx = await setup({ store, handler: () => json({}, 401) });
+  await ctx.scene({ text: 'x' });
+  assert.match(store.data.refused, /^[0-9a-f]{2}$/);
+  ctx.api.handler = undefined;
+  // Find a new key whose 8-bit mark collides with the refused one.
+  let other;
+  for (let i = 0; !other; i += 1) {
+    if (keyMark(store.data.salt, `${KEY}-${i}`) === store.data.refused) other = `${KEY}-${i}`;
+  }
+  await ctx.gladys.fake.configUpdated({ ...BASE_CONFIG, api_key: other });
+  assert.equal((await ctx.scene({ text: 'x' })).success, true);
+  assert.equal(store.data.refused, null);
+  assert.equal(status(ctx.gladys).connected, true);
+  // The same key saved again (no change) keeps a refusal.
+  ctx.api.handler = () => json({}, 401);
+  await ctx.scene({ text: 'x' });
+  await ctx.gladys.fake.configUpdated({ ...BASE_CONFIG, api_key: other });
+  ctx.api.handler = undefined;
+  assert.match((await ctx.scene({ text: 'x' })).error, /refusée/);
+  await ctx.app.stop();
 });
 
 test('the test button tries a refused key again, and its success lifts the refusal', async () => {
@@ -326,24 +345,26 @@ test('the test button tries a refused key again, and its success lifts the refus
   await ctx.app.stop();
 });
 
-test('check button: 403 is not a refusal, 401 is, a 5xx pauses; it never sends an SMS', async () => {
+test('check button: neither 403 nor 401 is a refusal for sending, a 5xx pauses; no SMS', async () => {
   const ctx = await setup({ handler: () => json({ status: 403 }, 403) });
   const ok = await ctx.gladys.fake.action('check_account', {});
   assert.match(ok.data.message.fr, /accepté la clé ; son rôle/);
   assert.equal(status(ctx.gladys).connected, true);
   ctx.api.handler = () => json({}, 401);
   const refused = await ctx.gladys.fake.action('check_account', {});
-  assert.match(refused.data.message.fr, /Non vérifié : la clé d'API a été refusée/);
-  assert.equal(status(ctx.gladys).connected, false);
+  assert.match(refused.data.message.fr, /API de compte smsmode a refusé la clé \(401\)/);
+  assert.equal(status(ctx.gladys).connected, true, 'the account route is secondary');
+  assert.equal(ctx.store.data?.refused ?? null, null);
+  ctx.api.handler = (r) => (r.method === 'POST' ? undefined : json({}, 401));
+  assert.equal((await ctx.scene({ text: 'x' })).success, true, 'scenes still send');
   ctx.api.handler = () => json({}, 502);
   await ctx.gladys.fake.action('check_account', {});
   const paused = await ctx.gladys.fake.action('check_account', {});
   assert.match(paused.data.message.fr, /pause/);
-  assert.equal(ctx.api.sends().length, 0);
-  assert.ok(
-    ctx.api.requests.every((r) => r.path === '/commons/v1/organisations?page=1&pageSize=1'),
-  );
-  assert.equal(ctx.api.requests.length, 3, 'nothing during the pause');
+  const gets = ctx.api.requests.filter((r) => r.method === 'GET');
+  assert.ok(gets.every((r) => r.path === '/commons/v1/organisations?page=1&pageSize=1'));
+  assert.equal(gets.length, 3, 'nothing during the pause');
+  assert.equal(ctx.api.sends().length, 1, 'only the scene sent an SMS');
   await ctx.app.stop();
 });
 
@@ -389,14 +410,15 @@ test('one request in flight; a full queue refuses; a late job sends nothing', as
 test('a job whose time is over sends nothing', async () => {
   const ctx = await setup({
     handler: async () => {
-      // smsmode takes 50 s (the virtual clock moves; the real timeout is not reached).
-      await ctx.clock.advance(50 * SECOND);
+      // smsmode takes 26 s (the virtual clock moves; the real timeout is not reached):
+      // 14 s are left, less than a request and its two saves need.
+      await ctx.clock.advance(26 * SECOND);
       return undefined;
     },
   });
   const ack = await ctx.scene({ text: 'x', recipients: '0612345678, 0712345678' });
   assert.equal(ack.data.outputs.sent, 1);
-  assert.equal(ack.data.outputs.not_sent, 1, 'the second has 5 s left: not enough for a request');
+  assert.equal(ack.data.outputs.not_sent, 1, 'the second has 14 s left: not enough');
   assert.equal(ctx.api.sends().length, 1);
   await ctx.app.stop();
 });
@@ -531,4 +553,172 @@ test('the key fingerprint has 8 bits: every value is shared by many keys', () =>
 test('App: a send before start is refused', async () => {
   const app = new App({ gladys: {}, store: createMemoryStore(), logger: { warn() {} } });
   await assert.rejects(app.send({ text: 'x', budget: 1000 }), /config_unread/);
+});
+
+/** A memory store whose load waits for `release()` (a slow or hung /data). */
+function slowStore(initial) {
+  const store = createMemoryStore(initial);
+  const load = store.load;
+  let release;
+  const gate = new Promise((resolve) => (release = resolve));
+  store.release = release;
+  store.load = async () => {
+    await gate;
+    return load();
+  };
+  return store;
+}
+
+test('a send waits for the first /data read: a slow read does not bypass the cap', async () => {
+  const store = slowStore({ sends: [1, 2, 3].map((i) => ({ wall: NOW - i * MINUTE, parts: 1 })) });
+  const ctx = await setup({ store, config: { ...BASE_CONFIG, max_sms_per_hour: 3 } });
+  const pending = ctx.scene({ text: 'x' });
+  await ctx.clock.advance(2 * SECOND);
+  store.release();
+  const ack = await pending;
+  assert.match(ack.error, /plafond/);
+  assert.equal(ctx.api.requests.length, 0);
+  await ctx.app.stop();
+});
+
+test('a /data read that hangs: unreadable after 3 s (status), sends go, written when it ends', async () => {
+  const store = slowStore({ sends: [{ wall: NOW - MINUTE, parts: 1 }] });
+  const ctx = await setup({ store, config: { ...BASE_CONFIG, max_sms_per_hour: 5 } });
+  const pending = ctx.scene({ text: 'x' });
+  await ctx.clock.advance(3200);
+  const ack = await pending;
+  assert.equal(ack.success, true, ack.error);
+  assert.match(status(ctx.gladys).message.fr, /\/data est illisible/);
+  assert.equal(store.saves, 0, 'nothing written over a /data not read');
+  await ctx.wait(30 * SECOND);
+  assert.equal(ctx.api.sends().length, 1);
+  store.release();
+  await ctx.wait(0);
+  await ctx.wait(0);
+  assert.equal(store.data.sends.length, 2, 'the send of this run is written with the old one');
+  assert.doesNotMatch(status(ctx.gladys).message.fr, /illisible/);
+  await ctx.app.stop();
+});
+
+test('the send is written to /data before its request leaves (a crash keeps it counted)', async () => {
+  const store = createMemoryStore();
+  let seen;
+  const first = await setup({
+    store,
+    config: { ...BASE_CONFIG, max_sms_per_hour: 1 },
+    handler: () => {
+      seen = store.data?.sends?.length;
+      return new Promise(() => {}); // the process dies during the request
+    },
+  });
+  first.scene({ text: 'x' });
+  await first.clock.advance(0);
+  await first.clock.advance(0);
+  assert.equal(seen, 1, 'counted in /data when the request left');
+  const again = await setup({ store, config: { ...BASE_CONFIG, max_sms_per_hour: 1 } });
+  assert.match((await again.scene({ text: 'y' })).error, /plafond/);
+  assert.equal(again.api.requests.length, 0);
+  await again.app.stop();
+});
+
+test('stop during the save before a send: the request never leaves', async () => {
+  const store = createMemoryStore();
+  const ctx = await setup({ store });
+  let release;
+  const gate = new Promise((resolve) => (release = resolve));
+  const save = store.save;
+  store.save = async (data) => {
+    await gate;
+    return save(data);
+  };
+  const pending = ctx.scene({ text: 'x' });
+  await ctx.clock.advance(0);
+  const stopping = ctx.app.stop();
+  release();
+  await stopping;
+  assert.match((await pending).error, /arrêtée/);
+  assert.equal(ctx.api.requests.length, 0);
+});
+
+test('the check button waits in the same queue: one request in flight, queue bounded', async () => {
+  let release;
+  const gate = new Promise((resolve) => (release = resolve));
+  const ctx = await setup({
+    config: { ...BASE_CONFIG, max_sms_per_hour: 200 },
+    handler: async () => {
+      await gate;
+      return undefined;
+    },
+  });
+  const acks = [];
+  for (let i = 0; i < 20; i += 1) acks.push(ctx.scene({ text: `n${i}` }));
+  await ctx.clock.advance(0);
+  const full = await ctx.gladys.fake.action('check_account', {});
+  assert.match(full.data.message.fr, /attendent leur tour/);
+  release();
+  await Promise.all(acks);
+  let releaseLast;
+  const last = new Promise((resolve) => (releaseLast = resolve));
+  ctx.api.handler = async (r) => {
+    if (r.method === 'POST') await last;
+    return undefined;
+  };
+  const slow = ctx.scene({ text: 'last' });
+  await ctx.clock.advance(0);
+  const check = ctx.gladys.fake.action('check_account', {});
+  await ctx.clock.advance(0);
+  assert.equal(ctx.api.requests.filter((r) => r.method === 'GET').length, 0, 'waits its turn');
+  releaseLast();
+  await Promise.all([slow, check]);
+  assert.equal(ctx.api.peak, 1);
+  assert.equal(ctx.api.requests.filter((r) => r.method === 'GET').length, 1);
+  await ctx.app.stop();
+});
+
+test('a refusal seen before /data is read is kept under the salt of /data', async () => {
+  const store = createMemoryStore({ salt: 'c'.repeat(32), refused: null });
+  store.unreadable = true;
+  const ctx = await setup({ store, handler: () => json({}, 401) });
+  await ctx.scene({ text: 'x' });
+  ctx.api.handler = undefined;
+  store.unreadable = false;
+  await ctx.wait(10 * SECOND);
+  assert.equal(store.data.salt, 'c'.repeat(32));
+  assert.equal(store.data.refused, keyMark('c'.repeat(32), KEY));
+  assert.match((await ctx.scene({ text: 'x' })).error, /refusée/);
+  await ctx.app.stop();
+});
+
+test('a /data write that fails is said in the status, and cleared by the next success', async () => {
+  const store = createMemoryStore();
+  const ctx = await setup({ store });
+  store.failSave = true;
+  await ctx.scene({ text: 'x' });
+  await ctx.wait(0);
+  assert.match(status(ctx.gladys).message.fr, /n'a pas pu être écrit/);
+  assert.equal(status(ctx.gladys).connected, true);
+  store.failSave = false;
+  await ctx.scene({ text: 'y' });
+  await ctx.wait(0);
+  assert.doesNotMatch(status(ctx.gladys).message.fr, /écrit/);
+  await ctx.app.stop();
+});
+
+test('STOP: its room is kept when cutting, and it counts in the parts and the cap', async () => {
+  const ctx = await setup({
+    config: { ...BASE_CONFIG, stop_mention: true, max_parts: 1, max_sms_per_hour: 3 },
+  });
+  const ack = await ctx.scene({ text: 'a'.repeat(300) });
+  assert.equal(ack.data.outputs.truncated, true);
+  assert.equal(ctx.api.sends()[0].body.body.text.length, 140, '160 minus 20 for STOP');
+  assert.equal(ctx.api.sends()[0].body.body.stop, true);
+  await ctx.app.stop();
+  const two = await setup({
+    config: { ...BASE_CONFIG, stop_mention: true, max_parts: 3, max_sms_per_hour: 3 },
+  });
+  // 150 characters + STOP: 2 SMS.
+  assert.equal((await two.scene({ text: 'b'.repeat(150) })).success, true);
+  assert.match((await two.scene({ text: 'c'.repeat(150) })).error, /plafond/);
+  assert.equal((await two.scene({ text: 'short' })).success, true, '2 + 1 = 3');
+  await two.app.stop();
 });

@@ -74,12 +74,14 @@ export async function readBounded(response, limit) {
   return Buffer.concat(chunks).toString('utf8');
 }
 
-/** The smsmode error code of a 4xx answer ("RECIPIENT_TO_INVALID"…), never its free text. */
+/** The smsmode error code of a 4xx answer ("400.029"), never its free text. */
 function errorCode(text) {
   try {
     const json = JSON.parse(text);
     const code = json?.errorCode ?? json?.type;
-    return typeof code === 'string' && /^[A-Za-z_.-]{3,60}$/.test(code) ? code : undefined;
+    return typeof code === 'string' && /^(?:\d{3}\.\d{3}|[A-Za-z_][A-Za-z_.-]{2,59})$/.test(code)
+      ? code
+      : undefined;
   } catch {
     return undefined;
   }

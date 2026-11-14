@@ -12,7 +12,7 @@ smsmode credit. Send only: nothing is received.
   ones), and the outputs `sent`, `not_sent`, `message_ids`, `truncated`.
 - Two buttons: "Check the key and the credit" (no SMS) and "Send a test SMS".
 - No SMS at any other time. An hourly cap of billed SMS (1 to 200, kept across
-  a restart), never a second try of an SMS that may have left, one request at
+  a restart while `/data` reads and writes), never a second try of an SMS that may have left, one request at
   a time, a pause after a 429 or a 5xx, a refused key never used again by a
   scene.
 - French mobiles (overseas included) and international numbers with + or 00;

@@ -62,31 +62,38 @@ Outputs, for the following actions of the scene:
 
 When no SMS is accepted, the action fails with the reason in the scene log ("Nothing sent: the hourly
 cap is reached", …); the scene goes on. Several recipients are served one after the other: a 400 on one
-number does not stop the next one; a refused key, a lack of credit, a failure or a timeout stop the
-next ones.
+number does not stop the next one; a refused key, a 402, a 403, a failure or a timeout stop the next
+ones.
 
-The action gives Gladys one minute at most. A request lasts 10 seconds at most; a recipient with less
-than 10 seconds left is not tried.
+Gladys gives the action one minute, its own wait for the connection included; the module takes 40
+seconds of it. A request lasts 10 seconds at most; a recipient with less than 16.5 seconds left (the
+request and the two `/data` writes around it) is not tried.
 
 ## The safeguards
 
-- **Hourly cap**: the SMS billed over the last 60 minutes (a 2-SMS text counts 2, and each recipient
-  counts) never pass the setting. An SMS is counted before its request leaves; it is given back only
-  when smsmode surely did not take it (a 4xx error, server not found, connection refused). The number of parts is the one the module computes, raised when smsmode
-  announces more in its answer. The send times are kept in `/data`: a restart does not reset the
-  count. When `/data` is unreadable (the status says so) or cannot be written, the cap counts only the
-  SMS sent since the start; sending is not blocked for that.
+- **Hourly cap**: a send that would bring the SMS billed over the last 60 minutes above the setting
+  is refused (a 2-SMS text counts 2, each recipient counts, the STOP mention too). The number of SMS is
+  the one the module computes; when smsmode announces more in its answer, the count is raised
+  afterwards. An SMS is counted and written to `/data` before its request leaves; it is given back
+  only when smsmode surely did not take it (a 4xx error, server not found, connection refused). A
+  restart therefore does not reset the count. At start, a send waits for `/data` to be read (3 seconds
+  at most). When `/data` is unreadable, too slow, or cannot be written (the status says so in each
+  case), the cap counts only the SMS sent since the start, and a restart may forget it; sending is not
+  blocked for that (an alert must leave).
 - **Never tried again** when an SMS may have left (timeout, connection cut, 5xx error): a second try
   could be a second paid SMS. The result says "sent without confirmation".
 - **One send at a time** to smsmode; at most 20 sends wait for their turn, more are refused.
 - **Pause**: after a 429 (smsmode asks to slow down), the time smsmode gives, between 60 s and 6 h;
   after a 5xx error, 60 s, doubled on each new error, 6 h at most. Nothing is sent during the pause,
   buttons included; it is kept in `/data`.
-- **Refused key** (401): no scene uses it any more. A short fingerprint (8 bits, salted) is kept in
-  `/data`, never the key. The refusal is lifted by a new key, or by a success of either button (which
-  do try the key).
-- **Credit too low** (402) or **sender refused** (403): the status says so; the next send is tried all
-  the same (smsmode decides).
+- **Key refused for sending** (401 on sending an SMS): no scene uses it any more. A short fingerprint
+  (8 bits, salted) is kept in `/data`, never the key. The refusal is lifted by changing the key, or by
+  a success of either button (which do try the key). A 401 of the "Check the key and the credit"
+  button (account API) does not block sending: a key may be allowed to send without reading its
+  account.
+- **402** or **sender refused** (403): the status says so; the next send is tried all the same
+  (smsmode decides). The 402 (payment required, expected for an empty credit) is not in the smsmode
+  documentation: to be confirmed with a real account.
 
 ## Text, accents and cost
 
@@ -98,14 +105,17 @@ twice.
 "Simplify" replaces ê with e, ç with c, œ with oe, ’ with ', « » with ", – with -, … with ..., the
 no-break space with a space: a French text keeps 160 characters per SMS. An emoji stays as it is.
 
+With the STOP mention, 20 characters are kept for it: the text is cut sooner, and it counts in the
+number of SMS and the cap.
+
 Control and invisible characters are removed, line breaks are kept.
 
 ## Status
 
 The status of the integration tells: ready (with the cap), key missing or refused, invalid sender,
-pause in progress and its end time (Paris time), credit too low at the last send, configuration not
+pause in progress and its end time (Paris time), 402 or 403 at the last send, configuration not
 read yet (new try after 5 s, 10 s, 30 s, 1 min, then every 5 min), unreadable default numbers,
-unreadable `/data`.
+`/data` unreadable or too slow, `/data` not written.
 
 ## Data
 

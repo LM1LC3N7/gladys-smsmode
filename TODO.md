@@ -15,6 +15,10 @@
 
 ## To confirm
 
+- [ ] Whether smsmode answers 402 for an empty credit (not in the v1.15
+      documentation nor its status page; handled as "payment required").
+- [ ] The length of the STOP mention smsmode appends (12 characters in its
+      example; 20 kept by the module).
 - [ ] Whether smsmode answers 429 at all, and with a Retry-After (not in the
       OpenAPI file; the module handles both).
 - [ ] Whether `messagePartCount` is in the 201 answer (the cap counts it when
@@ -59,6 +63,17 @@
   overwritten, read again every 10 s, the run's sends merged and saved then.
 - **A wall time in the future in `/data`** (a clock set back) counts as now for
   the cap (at most one hour longer), never dropped.
+- **A 401 of the account route** (check button, Commons API) is not a refusal
+  of the key for sending: only a 401 of `POST /sms/v1/messages` marks it.
+- **/data at start**: a send waits for the first read (3 s at most); a read
+  slower than that counts as unreadable (status, read again every 10 s, its
+  result still applied when it ends, and the run's sends written then).
+- **STOP**: 20 units kept for the mention when cutting, and counted in the
+  parts and the cap.
+- **Scene budget 40 s** of the 60 s timeout (Gladys counts its own connection
+  wait, up to 15 s); a recipient needs 16.5 s left (request and two saves).
+- **A key changed during the run** lifts the refusal (an 8-bit mark can
+  collide); the same key saved again keeps it.
 - **402 and 403** set the status but do not block the next send: smsmode
   decides, and a credit top-up needs no action in Gladys.
 - **Test numbers in the docs** are fictional (06 12 34 56 78 style).

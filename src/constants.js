@@ -9,7 +9,7 @@ export const USER_AGENT = `gladys-smsmode/${VERSION} (+https://github.com/LM1LC3
 /** The smsmode REST API (https://dev.smsmode.com/sms/v1/, read on 2026-11-14). */
 export const API_BASE = 'https://rest.smsmode.com';
 export const SEND_PATH = '/sms/v1/messages';
-/** Organisations list: the organisation of the key, with its balance (Commons API v1). */
+/** Organisations list: the organisation of the key, with its balance (Commons API v1.14). */
 export const ACCOUNT_PATH = '/commons/v1/organisations?page=1&pageSize=1';
 
 export const CONFIG = {
@@ -48,17 +48,30 @@ export const CAP_WINDOW = 60 * 60_000;
 export const HTTP_TIMEOUT = 10_000;
 /** The answers read are small: anything larger is cut. */
 export const MAX_ANSWER_BYTES = 64 * 1024;
-/** Scene action budget: under the manifest's timeout_seconds (60 s). */
-export const SCENE_BUDGET = 55_000;
+/**
+ * Scene action budget: the manifest's timeout_seconds (60 s) counts from the
+ * moment the scene reaches the action, Gladys' own wait for the connection
+ * (up to 15 s) included: 40 s here leave that room.
+ */
+export const SCENE_BUDGET = 40_000;
 /** Test button budget: under the manifest's timeout_seconds (30 s). */
 export const BUTTON_BUDGET = 25_000;
 /** Scene actions waiting for their turn (one request in flight at a time). */
 export const MAX_QUEUE = 20;
 
+/**
+ * Units kept for the mention smsmode appends when STOP is asked ("\nSTOP"
+ * and a short number, 12 characters in its documentation example): counted
+ * in the parts and the cap, kept free when the text is cut.
+ */
+export const STOP_RESERVE = 20;
+
 /** Pause after a 429 or a 5xx: Retry-After when given, bounded, growing on repeat. */
 export const PAUSE_MIN = 60_000;
 export const PAUSE_MAX = 6 * 60 * 60_000;
 
+/** /data: a read taking longer counts as unreadable (read again every 10 s). */
+export const LOAD_TIMEOUT = 3_000;
 /** /data: read again every 10 s while unreadable; a save never waits longer than this. */
 export const STORE_RETRY = 10_000;
 export const SAVE_TIMEOUT = 3_000;
@@ -66,3 +79,9 @@ export const STATUS_TIMEOUT = 4_000;
 export const MAX_STATE_BYTES = 64 * 1024;
 /** Sends remembered for the cap (more is never needed: at most 200 per hour). */
 export const MAX_SENDS_KEPT = 500;
+
+/**
+ * What a request needs before the deadline: the save before it, the request,
+ * the save after it, and a margin.
+ */
+export const SEND_MARGIN = HTTP_TIMEOUT + 2 * SAVE_TIMEOUT + 500;

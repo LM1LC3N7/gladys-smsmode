@@ -16,13 +16,33 @@ import { MAX_STATE_BYTES } from './constants.js';
 
 export const DEFAULT_STATE_FILE = '/data/smsmode-state.json';
 
-export function createFileStore(file = DEFAULT_STATE_FILE) {
-  let queue = Promise.resolve();
-  const write = async (data) => {
-    const tmp = `${file}.tmp`;
-    await writeFile(tmp, JSON.stringify(data), 'utf8');
-    await rename(tmp, file);
-  };
+export function createFileStore(file = DEFAULT_STATE_FILE, { writeImpl } = {}) {
+  // One write at a time, and at most ONE waiting behind it: a newer snapshot
+  // replaces the waiting one (it holds everything the older one did), so a
+  // write that hangs never piles the saves up.
+  let writing = false;
+  let next; // { data, promise, resolve, reject }
+  const write =
+    writeImpl ??
+    (async (data) => {
+      const tmp = `${file}.tmp`;
+      await writeFile(tmp, JSON.stringify(data), 'utf8');
+      await rename(tmp, file);
+    });
+  async function pump() {
+    writing = true;
+    while (next) {
+      const slot = next;
+      next = undefined;
+      try {
+        await write(slot.data);
+        slot.resolve();
+      } catch (err) {
+        slot.reject(err);
+      }
+    }
+    writing = false;
+  }
   return {
     /** `{ status: 'ok', data }`, `{ status: 'missing' }` or `{ status: 'unreadable' }`. */
     async load() {
@@ -37,12 +57,16 @@ export function createFileStore(file = DEFAULT_STATE_FILE) {
       }
     },
     save(data) {
-      const job = queue.then(
-        () => write(data),
-        () => write(data),
-      );
-      queue = job.catch(() => {});
-      return job;
+      if (!next) {
+        const slot = {};
+        slot.promise = new Promise((resolve, reject) => Object.assign(slot, { resolve, reject }));
+        slot.promise.catch(() => {});
+        next = slot;
+      }
+      next.data = data;
+      const { promise } = next;
+      if (!writing) pump();
+      return promise;
     },
   };
 }

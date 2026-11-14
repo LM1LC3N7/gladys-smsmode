@@ -27,15 +27,17 @@ import {
   ACCOUNT_PATH,
   BUTTON_BUDGET,
   CAP_WINDOW,
-  HTTP_TIMEOUT,
+  LOAD_TIMEOUT,
   MAX_QUEUE,
   MAX_SENDS_KEPT,
   PAUSE_MAX,
   PAUSE_MIN,
   SAVE_TIMEOUT,
   SCENE_BUDGET,
+  SEND_MARGIN,
   SEND_PATH,
   STATUS_TIMEOUT,
+  STOP_RESERVE,
   STORE_RETRY,
 } from './constants.js';
 import { normalizeConfig } from './config.js';
@@ -94,7 +96,10 @@ export class App {
     /** /data: undefined (not read yet), 'ok', 'missing' or 'unreadable'. */
     this.dataState = undefined;
     this.loading = undefined;
+    this.loadTimer = undefined;
     this.storeTimer = undefined;
+    /** The last save of /data failed or took too long (said in the status). */
+    this.saveFailed = false;
     this.salt = undefined;
     this.refusedMark = undefined;
     /** SMS counted for the cap: { mono, wall, parts }. */
@@ -130,7 +135,7 @@ export class App {
   async stop() {
     this.running = false;
     this.generation += 1;
-    for (const key of ['configTimer', 'storeTimer', 'pauseTimer']) {
+    for (const key of ['configTimer', 'loadTimer', 'storeTimer', 'pauseTimer']) {
       if (this[key]) this.timers.clearTimeout(this[key]);
       this[key] = undefined;
     }
@@ -182,9 +187,19 @@ export class App {
     this.publishStatus();
   }
 
-  /** onConfigUpdated: nothing is sent, only the status changes. */
+  /**
+   * onConfigUpdated: nothing is sent, only the status changes. A key changed
+   * during the run lifts the refusal: the new key is always tried (its 8-bit
+   * mark could match the refused one by chance).
+   */
   configUpdated(raw) {
+    const before = this.config?.apiKey;
     this.applyConfig(raw);
+    if (before !== undefined && before !== this.config.apiKey && this.refusedMark) {
+      this.refusedMark = undefined;
+      this.save();
+      this.publishStatus();
+    }
   }
 
   /** The config for a send: read once more (bounded) when not read yet. */
@@ -203,7 +218,11 @@ export class App {
 
   // --- /data ----------------------------------------------------------------------
 
-  /** One read at a time; unreadable: again every 10 s; never awaited by a send. */
+  /**
+   * One read at a time. A read that takes more than 3 s counts as unreadable
+   * for now (its result is still applied if it ends); unreadable: read again
+   * every 10 s.
+   */
   loadState() {
     if (this.loading || this.dataState === 'ok' || this.dataState === 'missing') return;
     const gen = this.generation;
@@ -212,25 +231,53 @@ export class App {
       .catch(() => ({ status: 'unreadable' }))
       .then((result) => {
         this.loading = undefined;
+        if (this.loadTimer) this.timers.clearTimeout(this.loadTimer);
+        this.loadTimer = undefined;
         if (gen !== this.generation || !this.running) return;
         this.restore(result);
       });
+    if (this.loadTimer) this.timers.clearTimeout(this.loadTimer);
+    this.loadTimer = this.timers.setTimeout(() => {
+      this.loadTimer = undefined;
+      if (this.loading && gen === this.generation && this.running) {
+        this.restore({ status: 'unreadable' });
+      }
+    }, LOAD_TIMEOUT);
+  }
+
+  /** The next read of an unreadable /data, 10 s later (later again while one hangs). */
+  retryLoad() {
+    if (this.storeTimer || !this.running) return;
+    this.storeTimer = this.timers.setTimeout(() => {
+      this.storeTimer = undefined;
+      if (!this.running) return;
+      if (this.loading) this.retryLoad();
+      else this.loadState();
+    }, STORE_RETRY);
+  }
+
+  /** Before a send: /data read, or found unreadable (the first read is bounded). */
+  async dataForSend() {
+    if (this.dataState !== undefined || !this.running) return;
+    let timer;
+    const late = new Promise((resolve) => {
+      timer = this.timers.setTimeout(resolve, LOAD_TIMEOUT + 100);
+    });
+    await Promise.race([this.loading ?? Promise.resolve(), late]);
+    this.timers.clearTimeout(timer);
+    if (this.dataState === undefined) throw new NotSent('data_pending');
   }
 
   restore(result) {
     if (result.status === 'unreadable') {
       if (this.dataState !== 'unreadable')
-        this.logger.warn('/data is unreadable: read again every 10 s');
+        this.logger.warn('/data is unreadable or too slow: read again every 10 s');
       this.dataState = 'unreadable';
       this.publishStatus();
-      if (!this.storeTimer) {
-        this.storeTimer = this.timers.setTimeout(() => {
-          this.storeTimer = undefined;
-          if (this.running) this.loadState();
-        }, STORE_RETRY);
-      }
+      this.retryLoad();
       return;
     }
+    const hadSends = this.sends.length > 0;
     const data = result.status === 'ok' ? result.data : {};
     const wall = this.now();
     const mono = this.monotonic();
@@ -269,12 +316,13 @@ export class App {
     }
     // A refusal seen in this run (before /data read) is kept under the new salt.
     const key = this.config?.apiKey;
-    if (oldMark && oldSalt && key && keyMark(oldSalt, key) === oldMark) this.markRefused(key);
+    const carried = oldMark && oldSalt && key && keyMark(oldSalt, key) === oldMark;
+    if (carried) this.markRefused(key);
     const wasUnreadable = this.dataState === 'unreadable';
     this.dataState = result.status;
     this.publishStatus();
-    // What this run counted while /data was unreadable is written now.
-    if (wasUnreadable) this.save();
+    // What this run counted before /data was read is written now.
+    if (wasUnreadable || hadSends || carried) this.save();
   }
 
   snapshot() {
@@ -303,13 +351,21 @@ export class App {
       const outcome = await Promise.race([job, late]);
       if (outcome !== 'ok') this.logger.warn('/data not saved in time');
       else if (this.dataState === 'missing') this.dataState = 'ok';
+      this.noteSave(outcome === 'ok');
       return outcome === 'ok';
     } catch (err) {
       this.logger.warn(`/data not saved: ${err?.code ?? err?.message ?? err}`);
+      this.noteSave(false);
       return false;
     } finally {
       this.timers.clearTimeout(timer);
     }
+  }
+
+  noteSave(ok) {
+    if (this.saveFailed === !ok) return;
+    this.saveFailed = !ok;
+    this.publishStatus();
   }
 
   // --- Guards -----------------------------------------------------------------------
@@ -362,6 +418,7 @@ export class App {
     if (config.issues.includes('no_key')) throw new NotSent('no_key');
     if (config.issues.includes('bad_key')) throw new NotSent('bad_key');
     if (config.issues.includes('bad_sender')) throw new NotSent('bad_sender');
+    await this.dataForSend();
     let numbers;
     const typed = typeof rawRecipients === 'string' && rawRecipients.trim() !== '';
     try {
@@ -372,7 +429,11 @@ export class App {
     }
     if (!typed && config.issues.includes('bad_recipients')) throw new NotSent('bad_recipients');
     if (!numbers.length) throw new NotSent('no_recipient');
-    const prepared = prepareText(rawText, { maxParts: config.maxParts, accents: config.accents });
+    const prepared = prepareText(rawText, {
+      maxParts: config.maxParts,
+      accents: config.accents,
+      reserve: config.stop ? STOP_RESERVE : 0,
+    });
     if (!prepared.text) throw new NotSent('empty_text');
     if (this.waiting >= MAX_QUEUE) throw new NotSent('queue_full');
 
@@ -423,7 +484,7 @@ export class App {
   blocked({ deadline, gen, button, parts }) {
     const mono = this.monotonic();
     if (!this.running || gen !== this.generation) return 'stopped';
-    if (deadline - mono < HTTP_TIMEOUT + 500) return 'time';
+    if (deadline - mono < SEND_MARGIN) return 'time';
     if (this.paused(mono)) return 'paused';
     // A button may try a refused key again (its success lifts the refusal).
     if (!button && this.isRefused(this.config.apiKey)) return 'refused';
@@ -597,8 +658,10 @@ export class App {
         this.refusedMark = undefined;
         message = T.check.no_balance;
       } else {
-        this.onFailure(err, config);
-        message = reasonMessage(err.code, prefix);
+        // A 401 of the account route is not a refusal of the key for sending:
+        // a key may be allowed to send without reading its organisation.
+        if (err.code !== 'refused') this.onFailure(err, config);
+        message = err.code === 'refused' ? T.check.refused : reasonMessage(err.code, prefix);
       }
     }
     await this.save();
@@ -626,6 +689,7 @@ export class App {
     for (const extra of [
       c.issues.includes('bad_recipients') && T.status.bad_recipients,
       this.dataState === 'unreadable' && T.status.data_unreadable,
+      this.dataState !== 'unreadable' && this.saveFailed && T.status.data_unwritable,
     ]) {
       if (!extra) continue;
       message.en += extra.en;

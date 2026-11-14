@@ -38,16 +38,16 @@ export const T = {
       fr: `La configuration n'a pas pu être lue depuis Gladys : nouvel essai dans ${seconds} s.`,
     }),
     refused: {
-      en: 'smsmode refused the API key (401): nothing is sent with it. Type another key, or click "Check the key and the credit".',
-      fr: "smsmode a refusé la clé d'API (401) : rien n'est envoyé avec elle. Saisissez une autre clé, ou cliquez sur « Vérifier la clé et le crédit ».",
+      en: 'smsmode refused the API key for sending (401): no scene uses it any more. Type another key, or check it with "Send a test SMS" or "Check the key and the credit".',
+      fr: "smsmode a refusé la clé d'API à l'envoi (401) : plus aucune scène ne l'utilise. Saisissez une autre clé, ou vérifiez-la avec « Envoyer un SMS de test » ou « Vérifier la clé et le crédit ».",
     },
     paused: (time, why) => ({
       en: `smsmode ${why === 'rate_limited' ? 'asked to slow down (429)' : 'is failing (5xx)'}: nothing is sent before ${time} (Paris time).`,
       fr: `smsmode ${why === 'rate_limited' ? 'a demandé de ralentir (429)' : 'est en panne (5xx)'} : rien n'est envoyé avant ${time} (heure de Paris).`,
     }),
     credit: {
-      en: 'Your smsmode credit was too low at the last send (402): top it up on smsmode.com.',
-      fr: 'Votre crédit smsmode était insuffisant au dernier envoi (402) : rechargez-le sur smsmode.com.',
+      en: 'smsmode answered 402 (payment required) at the last send: check your credit on smsmode.com.',
+      fr: 'smsmode a répondu 402 (paiement requis) au dernier envoi : vérifiez votre crédit sur smsmode.com.',
     },
     forbidden: {
       en: 'smsmode refused the sender or the rights of the key at the last send (403): check the sender in your smsmode account.',
@@ -61,6 +61,10 @@ export const T = {
       en: ' The default numbers do not read (French mobile, or international number with + or 00, 5 at most).',
       fr: ' Les numéros par défaut sont illisibles (mobile français, ou numéro international avec + ou 00, 5 au plus).',
     },
+    data_unwritable: {
+      en: ' /data could not be written: the hourly cap may not survive a restart.',
+      fr: " /data n'a pas pu être écrit : le plafond horaire peut ne pas passer un redémarrage.",
+    },
     data_unreadable: {
       en: ' /data is unreadable: the hourly cap counts the SMS of this run only.',
       fr: ' /data est illisible : le plafond horaire ne compte que les SMS de cette session.',
@@ -72,6 +76,10 @@ export const T = {
     no_key: { en: 'no API key', fr: "pas de clé d'API" },
     bad_key: { en: 'the API key does not read', fr: "la clé d'API est illisible" },
     bad_sender: { en: 'the sender does not read', fr: "l'émetteur est illisible" },
+    data_pending: {
+      en: '/data is not read yet',
+      fr: "/data n'est pas encore lu",
+    },
     config_unread: {
       en: 'the configuration is not read yet',
       fr: "la configuration n'est pas encore lue",
@@ -98,7 +106,7 @@ export const T = {
     paused: { en: 'smsmode asked for a pause', fr: 'smsmode a demandé une pause' },
     cap: { en: 'the hourly cap is reached', fr: 'le plafond horaire est atteint' },
     refused: { en: 'the API key was refused (401)', fr: "la clé d'API a été refusée (401)" },
-    credit: { en: 'not enough smsmode credit (402)', fr: 'crédit smsmode insuffisant (402)' },
+    credit: { en: 'payment required by smsmode (402)', fr: 'paiement requis par smsmode (402)' },
     forbidden: {
       en: 'sender or key rights refused (403)',
       fr: 'émetteur ou droits de la clé refusés (403)',
@@ -154,6 +162,10 @@ export const T = {
       en: `smsmode accepted the key.${balance ? ` Balance: ${balance}.` : ''}`,
       fr: `smsmode a accepté la clé.${balance ? ` Solde : ${balance}.` : ''}`,
     }),
+    refused: {
+      en: 'The smsmode account API refused the key (401). This does not block sending: the "Send a test SMS" button tells whether the key can send.',
+      fr: "L'API de compte smsmode a refusé la clé (401). Cela ne bloque pas l'envoi : le bouton « Envoyer un SMS de test » dit si la clé peut envoyer.",
+    },
     no_balance: {
       en: 'smsmode accepted the key; its role does not allow reading the balance (403).',
       fr: 'smsmode a accepté la clé ; son rôle ne permet pas de lire le solde (403).',

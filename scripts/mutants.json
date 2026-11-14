@@ -92,7 +92,7 @@
   {
     "name": "deadline: not checked",
     "file": "src/app.js",
-    "from": "if (deadline - mono < HTTP_TIMEOUT + 500) return 'time';",
+    "from": "if (deadline - mono < SEND_MARGIN) return 'time';",
     "to": ""
   },
   {
@@ -134,7 +134,7 @@
   {
     "name": "/data: not saved after a late read",
     "file": "src/app.js",
-    "from": "if (wasUnreadable) this.save();",
+    "from": "if (wasUnreadable || hadSends || carried) this.save();",
     "to": ""
   },
   {
@@ -164,7 +164,7 @@
   {
     "name": "http: 4xx free text kept",
     "file": "src/http.js",
-    "from": "/^[A-Za-z_.-]{3,60}$/.test(code)",
+    "from": "/^(?:\\d{3}\\.\\d{3}|[A-Za-z_][A-Za-z_.-]{2,59})$/.test(code)",
     "to": "/^.{3,60}$/.test(code)"
   },
   {
@@ -184,12 +184,6 @@
     "file": "src/phone.js",
     "from": "if (/^33/.test(digits) && !/^33[67]\\d{8}$/.test(digits)) {",
     "to": "if (false) {"
-  },
-  {
-    "name": "phone: overseas as metropolitan",
-    "file": "src/phone.js",
-    "from": "digits = overseas ? overseas[1] + compact.slice(1) : `33${compact.slice(1)}`;",
-    "to": "digits = `33${compact.slice(1)}`;"
   },
   {
     "name": "phone: whole number in the mask",
@@ -232,5 +226,125 @@
     "file": "src/config.js",
     "from": "/^[\\x21-\\x7e]{8,200}$/",
     "to": "/^.{8,200}$/s"
+  },
+  {
+    "name": "deadline: saves not in the margin",
+    "file": "src/constants.js",
+    "from": "export const SEND_MARGIN = HTTP_TIMEOUT + 2 * SAVE_TIMEOUT + 500;",
+    "to": "export const SEND_MARGIN = HTTP_TIMEOUT + 500;"
+  },
+  {
+    "name": "check: 401 of the account route taken as a refusal",
+    "file": "src/app.js",
+    "from": "if (err.code !== 'refused') this.onFailure(err, config);",
+    "to": "this.onFailure(err, config);"
+  },
+  {
+    "name": "/data: a send does not wait for the first read",
+    "file": "src/app.js",
+    "from": "if (this.dataState !== undefined || !this.running) return;",
+    "to": "return;"
+  },
+  {
+    "name": "/data: a hung read never declared unreadable",
+    "file": "src/app.js",
+    "from": "        this.restore({ status: 'unreadable' });\n",
+    "to": "        // none\n"
+  },
+  {
+    "name": "STOP: no room kept",
+    "file": "src/app.js",
+    "from": "reserve: config.stop ? STOP_RESERVE : 0,",
+    "to": "reserve: 0,"
+  },
+  {
+    "name": "STOP: room kept but not counted",
+    "file": "src/text.js",
+    "from": "const units = unitsOf(text, encoding) + reserve;",
+    "to": "const units = unitsOf(text, encoding);"
+  },
+  {
+    "name": "phone: +33 692 left metropolitan",
+    "file": "src/phone.js",
+    "from": "if (overseas) digits = overseas[1] + french[1] + french[2];",
+    "to": ""
+  },
+  {
+    "name": "http: numeric error code dropped",
+    "file": "src/http.js",
+    "from": "/^(?:\\d{3}\\.\\d{3}|[A-Za-z_][A-Za-z_.-]{2,59})$/",
+    "to": "/^[A-Za-z_][A-Za-z_.-]{2,59}$/"
+  },
+  {
+    "name": "http: 4xx body not bounded",
+    "file": "src/http.js",
+    "from": "text = await readBounded(response, 4096);",
+    "to": "text = await response.text();"
+  },
+  {
+    "name": "status: failed save not said",
+    "file": "src/app.js",
+    "from": "this.dataState !== 'unreadable' && this.saveFailed && T.status.data_unwritable,",
+    "to": "false,"
+  },
+  {
+    "name": "store: every save queued",
+    "file": "src/store.js",
+    "from": "      if (!next) {",
+    "to": "      if (true) {"
+  },
+  {
+    "name": "key change does not lift the refusal",
+    "file": "src/app.js",
+    "from": "if (before !== undefined && before !== this.config.apiKey && this.refusedMark) {",
+    "to": "if (false) {"
+  },
+  {
+    "name": "save before the request removed",
+    "file": "src/app.js",
+    "from": "    this.sends.push(entry);\n    await this.save();",
+    "to": "    this.sends.push(entry);"
+  },
+  {
+    "name": "stop during the first save ignored",
+    "file": "src/app.js",
+    "from": "    if (!this.running || gen !== this.generation) {\n      this.release(entry);\n      return { ok: false, sent: 'no', code: 'stopped' };\n    }",
+    "to": ""
+  },
+  {
+    "name": "refusal not carried under the /data salt",
+    "file": "src/app.js",
+    "from": "    if (carried) this.markRefused(key);",
+    "to": ""
+  },
+  {
+    "name": "check button outside the queue",
+    "file": "src/app.js",
+    "from": "const job = this.queue.then(() => this.runCheck(config, gen));",
+    "to": "const job = Promise.resolve().then(() => this.runCheck(config, gen));"
+  },
+  {
+    "name": "check button queue unbounded",
+    "file": "src/app.js",
+    "from": "      if (this.waiting >= MAX_QUEUE) throw new NotSent('queue_full');\n    } catch (err) {",
+    "to": "    } catch (err) {"
+  },
+  {
+    "name": "store: unreadable read as missing",
+    "file": "src/store.js",
+    "from": "return err?.code === 'ENOENT' ? { status: 'missing' } : { status: 'unreadable' };",
+    "to": "return { status: 'missing' };"
+  },
+  {
+    "name": "store: size bound removed",
+    "file": "src/store.js",
+    "from": "if ((await stat(file)).size > MAX_STATE_BYTES) return { status: 'unreadable' };",
+    "to": ""
+  },
+  {
+    "name": "store: a non-object accepted",
+    "file": "src/store.js",
+    "from": "return data && typeof data === 'object' && !Array.isArray(data)",
+    "to": "return true"
   }
 ]

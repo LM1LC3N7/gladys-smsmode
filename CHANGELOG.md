@@ -24,8 +24,12 @@ the notes of the version's GitHub Release.
   one request at a time; a pause after a 429 (Retry-After, 60 s to 6 h) or a
   5xx (60 s, doubled, 6 h at most); a refused key (401) never used again by a
   scene until it changes or a button succeeds.
-- French mobiles (overseas included) and international numbers; numbers
-  masked in the logs; the key never logged nor kept in `/data`.
+- French mobiles (overseas included, also written with +33) and international
+  numbers; numbers masked in the logs; the key never logged nor kept in
+  `/data`.
+- The STOP mention keeps its room in the text and counts in the parts and the
+  cap; a send waits for the first read of `/data`; a slow, unreadable or
+  unwritable `/data` is said in the status.
 - The manifest declares `countries: ["FR"]` (France only), so it needs Gladys
   5.3.0 or later.
 - `THIRD_PARTY_NOTICES.md`, shipped in the image with `LICENSE`.

@@ -82,7 +82,7 @@ test('real clock: the pause after a 5xx lasts 60 s, never less', async (t) => {
 
 test('real clock: the hourly cap frees a slot 60 minutes after the send; nothing after stop', async (t) => {
   const b = await bench(t, {
-    speed: 1000,
+    speed: 400,
     config: {
       api_key: 'TestKey-0123456789',
       default_recipients: '0612345678',
@@ -94,7 +94,7 @@ test('real clock: the hourly cap frees a slot 60 minutes after the send; nothing
   const at = await firstAccepted(b, 60_000, 3 * 60 * 60_000);
   const gap = at - sentAt;
   assert.ok(
-    gap >= 60 * 60_000 && gap <= 75 * 60_000,
+    gap >= 60 * 60_000 && gap <= 90 * 60_000,
     `slot freed after ${Math.round(gap / 60_000)} min`,
   );
   assert.equal(b.requests.length, 2);

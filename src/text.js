@@ -118,9 +118,9 @@ export function unitsOf(text, encoding = encodingOf(text)) {
   return n;
 }
 
-/** The number of SMS the text is billed as. */
-export function partsOf(text, encoding = encodingOf(text)) {
-  const units = unitsOf(text, encoding);
+/** The number of SMS the text is billed as, `reserve` units appended by smsmode included. */
+export function partsOf(text, encoding = encodingOf(text), reserve = 0) {
+  const units = unitsOf(text, encoding) + reserve;
   const limit = LIMITS[encoding];
   if (units <= limit.single) return 1;
   return Math.ceil(units / limit.part);
@@ -134,15 +134,16 @@ export function capacity(encoding, maxParts) {
 
 /**
  * The text ready to send: cleaned, simplified when asked, cut to `maxParts`
- * SMS with "..." at the end. `{ text, encoding, parts, truncated }`, or
+ * SMS with "..." at the end, `reserve` units kept for what smsmode appends. `{ text, encoding, parts, truncated }`, or
  * `{ text: '' }` when nothing is left.
  */
-export function prepareText(raw, { maxParts, accents = 'keep' }) {
+export function prepareText(raw, { maxParts, accents = 'keep', reserve = 0 }) {
   let text = cleanText(raw);
   if (accents === 'simplify') text = simplify(text);
   if (!text) return { text: '', encoding: 'GSM7', parts: 0, truncated: false };
   const encoding = encodingOf(text);
-  const room = capacity(encoding, maxParts);
+  // The mention smsmode appends (STOP) takes its room in the last SMS.
+  const room = capacity(encoding, maxParts) - reserve;
   let truncated = false;
   if (unitsOf(text, encoding) > room) {
     truncated = true;
@@ -157,5 +158,5 @@ export function prepareText(raw, { maxParts, accents = 'keep' }) {
     }
     text = `${cut.trimEnd()}...`;
   }
-  return { text, encoding, parts: partsOf(text, encoding), truncated };
+  return { text, encoding, parts: partsOf(text, encoding, reserve), truncated };
 }

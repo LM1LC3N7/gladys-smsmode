@@ -47,10 +47,8 @@ export function normalizePhone(raw) {
   if (compact.length > 20 || !/^\+?\d+$/.test(compact)) throw new PhoneError('invalid', masked);
   let digits;
   if (/^0\d{9}$/.test(compact)) {
-    const overseas = OVERSEAS.find(([prefix]) => compact.startsWith(prefix));
-    // Overseas mobiles first (they start with 06 too); any other number is
-    // metropolitan, and the check below keeps only its mobiles.
-    digits = overseas ? overseas[1] + compact.slice(1) : `33${compact.slice(1)}`;
+    // Metropolitan numbering; the overseas mobiles are moved below.
+    digits = `33${compact.slice(1)}`;
   } else if (/^\+\d{8,15}$/.test(compact)) {
     digits = compact.slice(1);
   } else if (/^00\d{8,15}$/.test(compact)) {
@@ -62,6 +60,11 @@ export function normalizePhone(raw) {
     throw new PhoneError('invalid', masked);
   }
   if (digits.startsWith('0')) throw new PhoneError('invalid', masked);
+  // An overseas mobile written with 33 (0692…, +33 692…) belongs to its
+  // territory's code: as +33 6 92… it would not reach it.
+  const french = /^33(6\d\d)(\d{6})$/.exec(digits);
+  const overseas = french && OVERSEAS.find(([prefix]) => prefix === `0${french[1]}`);
+  if (overseas) digits = overseas[1] + french[1] + french[2];
   // A French number written internationally: a mobile (6 or 7) or nothing.
   if (/^33/.test(digits) && !/^33[67]\d{8}$/.test(digits)) {
     throw new PhoneError(digits.length === 11 ? 'landline' : 'invalid', masked);
