@@ -661,7 +661,9 @@ export class App {
         // A 401 of the account route is not a refusal of the key for sending:
         // a key may be allowed to send without reading its organisation.
         if (err.code !== 'refused') this.onFailure(err, config);
-        message = err.code === 'refused' ? T.check.refused : reasonMessage(err.code, prefix);
+        if (err.code !== 'refused') message = reasonMessage(err.code, prefix);
+        else if (this.isRefused(config.apiKey)) message = T.check.refused_blocked;
+        else message = T.check.refused;
       }
     }
     await this.save();

@@ -357,14 +357,22 @@ test('check button: neither 403 nor 401 is a refusal for sending, a 5xx pauses; 
   assert.equal(ctx.store.data?.refused ?? null, null);
   ctx.api.handler = (r) => (r.method === 'POST' ? undefined : json({}, 401));
   assert.equal((await ctx.scene({ text: 'x' })).success, true, 'scenes still send');
+  // Already refused for sending: the button does not say sending is free.
+  ctx.api.handler = () => json({}, 401);
+  await ctx.scene({ text: 'x' });
+  const blocked = await ctx.gladys.fake.action('check_account', {});
+  assert.match(blocked.data.message.fr, /déjà refusée à l'envoi/);
+  assert.doesNotMatch(blocked.data.message.fr, /ne bloque pas/);
+  ctx.api.handler = (r) => (r.method === 'POST' ? undefined : json({}, 401));
+  await ctx.gladys.fake.action('send_test', { phone: '0612345678' });
   ctx.api.handler = () => json({}, 502);
   await ctx.gladys.fake.action('check_account', {});
   const paused = await ctx.gladys.fake.action('check_account', {});
   assert.match(paused.data.message.fr, /pause/);
   const gets = ctx.api.requests.filter((r) => r.method === 'GET');
   assert.ok(gets.every((r) => r.path === '/commons/v1/organisations?page=1&pageSize=1'));
-  assert.equal(gets.length, 3, 'nothing during the pause');
-  assert.equal(ctx.api.sends().length, 1, 'only the scene sent an SMS');
+  assert.equal(gets.length, 4, 'nothing during the pause');
+  assert.equal(ctx.api.sends().length, 3, 'only the scenes and the test button sent an SMS');
   await ctx.app.stop();
 });
 

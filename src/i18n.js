@@ -163,8 +163,12 @@ export const T = {
       fr: `smsmode a accepté la clé.${balance ? ` Solde : ${balance}.` : ''}`,
     }),
     refused: {
-      en: 'The smsmode account API refused the key (401). This does not block sending: the "Send a test SMS" button tells whether the key can send.',
-      fr: "L'API de compte smsmode a refusé la clé (401). Cela ne bloque pas l'envoi : le bouton « Envoyer un SMS de test » dit si la clé peut envoyer.",
+      en: 'The smsmode account API refused the key (401). This alone does not block sending: the "Send a test SMS" button tells whether the key can send.',
+      fr: "L'API de compte smsmode a refusé la clé (401). Cela seul ne bloque pas l'envoi : le bouton « Envoyer un SMS de test » dit si la clé peut envoyer.",
+    },
+    refused_blocked: {
+      en: 'The smsmode account API refused the key (401), and smsmode had already refused it for sending: scenes still do not use it. Type another key, or check it with "Send a test SMS".',
+      fr: "L'API de compte smsmode a refusé la clé (401), et smsmode l'avait déjà refusée à l'envoi : les scènes ne l'utilisent toujours pas. Saisissez une autre clé, ou vérifiez-la avec « Envoyer un SMS de test ».",
     },
     no_balance: {
       en: 'smsmode accepted the key; its role does not allow reading the balance (403).',

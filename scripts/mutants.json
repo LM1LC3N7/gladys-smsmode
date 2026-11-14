@@ -346,5 +346,11 @@
     "file": "src/store.js",
     "from": "return data && typeof data === 'object' && !Array.isArray(data)",
     "to": "return true"
+  },
+  {
+    "name": "check: 401 says sending is free while the key is refused",
+    "file": "src/app.js",
+    "from": "else if (this.isRefused(config.apiKey)) message = T.check.refused_blocked;",
+    "to": ""
   }
 ]
