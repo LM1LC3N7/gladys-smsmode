@@ -130,7 +130,7 @@ test('headers: key, JSON both ways, User-Agent; GET without a body', async () =>
     assert.equal(init.headers.Accept, 'application/json');
     assert.match(
       init.headers['User-Agent'],
-      /^gladys-smsmode\/0\.1\.0 \(\+https:\/\/github\.com\/LM1LC3N7\/gladys-smsmode\)$/,
+      /^gladys-smsmode\/\d+\.\d+\.\d+ \(\+https:\/\/github\.com\/LM1LC3N7\/gladys-smsmode\)$/,
     );
     assert.equal(init.redirect, 'manual');
   }
